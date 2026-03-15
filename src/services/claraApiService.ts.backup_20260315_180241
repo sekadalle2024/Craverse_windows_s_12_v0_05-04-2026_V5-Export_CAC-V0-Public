@@ -647,155 +647,7 @@ export class ClaraApiService {
       routeCase = 4;
     } else if (userMessage.includes("Database")) {
       routeCase = 5;
-    } else if (userMessage.includes("Algorithme")) {
-      routeCase = 6;
-    } else if (userMessage.includes("Visualisation")) {
-      routeCase = 7;
-    } else if (
-      !userMessage.includes("Command") &&
-      !userMessage.includes("command") &&
-      !userMessage.includes("/")
-    ) {
-      routeCase = 8;
-    } else {
-      routeCase = 1; // Default: Standard
-    }
-
-    console.log(
-      `🔀 Switch Router - Case ${routeCase} sélectionné | Message: "${userMessage.substring(0, 60)}..."`,
-    );
-
-    // --- Switch case : routage vers l'endpoint ou le contenu direct ---
-    switch (routeCase) {
-      // ---------------------------------------------------------------
-      // Case 2 : [Integration] → webhook/integration_windows
-      // ---------------------------------------------------------------
-      case 2:
-        console.log("🔀 Route Case 2 → Integration Windows");
-        return {
-          type: "endpoint",
-          url: "https://j17rkv4c.rpcld.cc/webhook/integration_windows",
-          routeCase: 2,
-        };
-
-      // ---------------------------------------------------------------
-      // Case 3 : n8n_doc → webhook/n8n_doc
-      // ---------------------------------------------------------------
-      case 3:
-        console.log("🔀 Route Case 3 → n8n Documentation");
-        return {
-          type: "endpoint",
-          url: "https://fpb7ab9h.rpcl.app/webhook/n8n_doc",
-          routeCase: 3,
-        };
-
-      // ---------------------------------------------------------------
-      // Case 4 : Htlm_processor → webhook/htlm_processor
-      // ---------------------------------------------------------------
-      case 4:
-        console.log("🔀 Route Case 4 → HTML Processor");
-        return {
-          type: "endpoint",
-          url: "https://j17rkv4c.rpcld.cc/webhook/htlm_processor",
-          routeCase: 4,
-        };
-
-      // ---------------------------------------------------------------
-      // Case 5 : Database → Table directe avec lien cliquable (pas d'appel API)
-      // ---------------------------------------------------------------
-      case 5:
-        console.log(
-          "🔀 Route Case 5 → Database (table directe, pas d'appel n8n)",
-        );
-        return {
-          type: "direct",
-          content: this.generateDatabaseTable(),
-          routeCase: 5,
-        };
-
-      // ---------------------------------------------------------------
-      // Case 6 : Algorithme → webhook/algorithme
-      // ---------------------------------------------------------------
-      case 6:
-        console.log("🔀 Route Case 6 → Algorithme");
-        return {
-          type: "endpoint",
-          url: "https://j17rkv4c.rpcld.cc/webhook/algorithme",
-          routeCase: 6,
-        };
-
-      // ---------------------------------------------------------------
-      // Case 7 : Visualisation → webhook/visualisation
-      // ---------------------------------------------------------------
-      case 7:
-        console.log("🔀 Route Case 7 → Visualisation");
-        return {
-          type: "endpoint",
-          url: "https://j17rkv4c.rpcld.cc/webhook/visualisation",
-          routeCase: 7,
-        };
-
-      // ---------------------------------------------------------------
-      // Case 8 : Pas de commande → Table Notification directe (pas d'appel API)
-      // ---------------------------------------------------------------
-      case 8:
-        console.log(
-          "🔀 Route Case 8 → Notification (table directe, pas d'appel n8n)",
-        );
-        return {
-          type: "direct",
-          content: this.generateNotificationTable(),
-          routeCase: 8,
-        };
-
-      // ---------------------------------------------------------------
-      // Case 1 (Default) : Standard ou commande générique → webhook/template
-      // ---------------------------------------------------------------
-      case 1:
-      default:
-        console.log("🔀 Route Case 1 (Default) → Template Standard");
-        return {
-          type: "endpoint",
-          url: "https://j17rkv4c.rpcld.cc/webhook/template",
-          routeCase: 1,
-        };
-    }
-  }
-
-  /**
-   * Case 5 - Génère une table Markdown avec un lien cliquable vers le formulaire Database n8n.
-   * Format : 1 colonne "Database" | 1 ligne de données
-   */
-  private generateDatabaseTable(): string {
-    const link = "https://j17rkv4c.rpcld.cc/webhook/database";
-    return (
-      `| Database |\n` +
-      `|----------|\n` +
-      `| [🔗 Accéder au formulaire Database](${link}) |\n`
-    );
-  }
-
-  /**
-   * Case 8 - Génère une table Notification sans appel API.
-   * Format : 1 colonne "Notification" | 1 ligne avec le message d'information
-   */
-  private generateNotificationTable(): string {
-    return (
-      `| Notification |\n` +
-      `|--------------|\n` +
-      `| Merci d'exécuter les commandes prévues dans le "Bouton demarrer"` +
-      ` ou le Guide utilisateur. Le cas échéant, se référer à l'éditeur de la suite E-audit |\n`
-    );
-  }
-
-  // =========================================================================
-  // END SWITCH ROUTER
-  // =========================================================================
-
-  /**
-   * Send a chat message
-   * Utilise le Switch Router pour déterminer l'endpoint ou retourner un contenu direct.
-   */
+    } else if (userMessage.includes("
   public async sendChatMessage(
     message: string,
     config: ClaraAIConfig,
@@ -805,43 +657,10 @@ export class ClaraApiService {
     onContentChunk?: (content: string) => void,
   ): Promise<ClaraMessage> {
     try {
-      // -----------------------------------------------------------------------
-      // SWITCH ROUTER : Résolution de l'endpoint ou du contenu direct
-      // -----------------------------------------------------------------------
-      const routerConfig = this.getRouterConfig(message);
-
       console.log(
-        `🚀 Switch Router résolu → Type: "${routerConfig.type}" | Case: ${routerConfig.routeCase}`,
+        "🚀 Envoi de la requête vers n8n endpoint:",
+        this.n8nEndpoint,
       );
-
-      // -----------------------------------------------------------------------
-      // Cas 5 & 8 : Retour direct sans aucun appel réseau
-      // -----------------------------------------------------------------------
-      if (routerConfig.type === "direct") {
-        console.log(
-          `📋 Retour direct (Case ${routerConfig.routeCase}) - Aucun appel n8n`,
-        );
-        const directMessage: ClaraMessage = {
-          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          role: "assistant",
-          content: routerConfig.content,
-          timestamp: new Date(),
-          metadata: {
-            model: "n8n-router",
-            endpoint: "local",
-            routeCase: routerConfig.routeCase,
-            format: "direct_table",
-          },
-        };
-        return directMessage;
-      }
-
-      // -----------------------------------------------------------------------
-      // Cas 1, 2, 3, 4, 6, 7 : Appel vers l'endpoint n8n résolu par le router
-      // -----------------------------------------------------------------------
-      const activeEndpoint = routerConfig.url;
-
-      console.log("🚀 Envoi de la requête vers n8n endpoint:", activeEndpoint);
       console.log("📝 Message original:", message);
       console.log("📎 Attachments:", attachments?.length || 0);
       console.log("⏱️ Timeout configuré:", this.n8nTimeout / 1000, "secondes");
@@ -877,7 +696,7 @@ export class ClaraApiService {
 
       const startTime = Date.now();
 
-      const response = await fetch(activeEndpoint, {
+      const response = await fetch(this.n8nEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -947,8 +766,7 @@ export class ClaraApiService {
         timestamp: new Date(),
         metadata: {
           model: "n8n",
-          endpoint: activeEndpoint,
-          routeCase: routerConfig.routeCase,
+          endpoint: this.n8nEndpoint,
           ...metadata,
         },
       };
@@ -971,15 +789,6 @@ export class ClaraApiService {
         stack: err.stack,
       });
 
-      // Récupérer l'endpoint actif pour les messages d'erreur
-      let activeEndpointForError = this.n8nEndpoint;
-      try {
-        const cfg = this.getRouterConfig(message);
-        if (cfg.type === "endpoint") activeEndpointForError = cfg.url;
-      } catch {
-        /* ignore */
-      }
-
       // Analyser le type d'erreur
       let errorMessage =
         "I apologize, but I encountered an error while processing your request with n8n.";
@@ -994,17 +803,17 @@ export class ClaraApiService {
             : `${timeoutSeconds} secondes`;
 
         errorMessage = `⏱️ **Request timeout**: The n8n workflow took too long to respond (>${timeoutDisplay}).`;
-        troubleshootingTips = `\n\n**This is normal for complex LLM workflows.**\n\n**Solutions:**\n\n1. **Increase timeout** (recommended for LLM tasks):\n   \`\`\`javascript\n   // In browser console:\n   claraApiService.setN8nTimeout(15 * 60 * 1000); // 15 minutes\n   \`\`\`\n\n2. **Simplify your request**:\n   - Reduce the number of items to generate\n   - Break complex tasks into smaller requests\n\n3. **Optimize n8n workflow**:\n   - Check if the LLM model is responding slowly\n   - Review workflow execution logs in n8n\n\n**Current timeout**: ${timeoutDisplay}\n**Recommended for LLM**: 10-15 minutes`;
+        troubleshootingTips = `\n\n**This is normal for complex LLM workflows.**\n\n**Solutions:**\n\n1. **Increase timeout** (recommended for LLM tasks):\n   \`\`\`javascript\n   // In browser console:\n   claraApiService.setN8nTimeout(15 * 60 * 1000); // 15 minutes\n   \`\`\`\n\n2. **Simplify your request**:\n   - Reduce the number of items to generate\n   - Break complex tasks into smaller requests\n   - Example: Ask for 10 items instead of 25\n\n3. **Optimize n8n workflow**:\n   - Check if the LLM model is responding slowly\n   - Review workflow execution logs in n8n\n   - Consider using a faster model\n   - Add intermediate "Respond to Webhook" for progress updates\n\n**Current timeout**: ${timeoutDisplay}\n**Recommended for LLM**: 10-15 minutes`;
       } else if (
         err.message.includes("Failed to fetch") ||
         err.message.includes("NetworkError")
       ) {
         errorMessage = "🌐 Network error: Unable to connect to n8n endpoint.";
-        troubleshootingTips = `\n\n**Troubleshooting:**\n1. **CORS Issue**: Ensure n8n webhook has CORS enabled\n2. **Endpoint URL**: Verify endpoint is accessible: \`${activeEndpointForError}\`\n3. **Network**: Check your internet connection\n4. **n8n Status**: Verify n8n workflow is active\n\n**To Fix CORS in n8n:**\n- Add header: \`Access-Control-Allow-Origin\` = \`*\`\n- Add header: \`Access-Control-Allow-Methods\` = \`POST, OPTIONS\`\n- Add header: \`Access-Control-Allow-Headers\` = \`Content-Type\``;
+        troubleshootingTips = `\n\n**Troubleshooting:**\n1. **CORS Issue**: Ensure n8n webhook has CORS enabled\n2. **Endpoint URL**: Verify endpoint is accessible: \`${this.n8nEndpoint}\`\n3. **Network**: Check your internet connection\n4. **n8n Status**: Verify n8n workflow is active\n\n**Technical Details:**\n- Endpoint: \`${this.n8nEndpoint}\`\n- Error: \`${err.message}\`\n\n**To Fix CORS in n8n:**\n- In your webhook node, set "Respond" > "Options" > "Response Headers"\n- Add header: \`Access-Control-Allow-Origin\` = \`*\` (or your domain)\n- Add header: \`Access-Control-Allow-Methods\` = \`POST, OPTIONS\`\n- Add header: \`Access-Control-Allow-Headers\` = \`Content-Type\``;
       } else if (err.message.includes("404")) {
         errorMessage =
           "🔍 Endpoint not found: The n8n webhook URL may be incorrect.";
-        troubleshootingTips = `\n\n**Check:**\n- Workflow is activated in n8n\n- Webhook path is correct: \`${activeEndpointForError}\``;
+        troubleshootingTips = `\n\n**Check:**\n- Workflow is activated in n8n\n- Webhook path is correct: \`${this.n8nEndpoint}\``;
       } else if (
         err.message.includes("500") ||
         err.message.includes("502") ||
@@ -1022,7 +831,7 @@ export class ClaraApiService {
         content: `${errorMessage}${troubleshootingTips}\n\nPlease try again or contact support if the issue persists.`,
         timestamp: new Date(),
         metadata: {
-          error: `${err.message} (endpoint: ${activeEndpointForError})`,
+          error: `${err.message} (endpoint: ${this.n8nEndpoint})`,
           errorType: err.name,
         },
       };
