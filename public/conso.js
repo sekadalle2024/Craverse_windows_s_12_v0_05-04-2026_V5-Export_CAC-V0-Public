@@ -275,7 +275,7 @@
     }
 
     isModelizedTable(headers) {
-      const requiredColumns = ["conclusion", "assertion"];
+      const requiredColumns = ["conclusion", "assertion", "ctr"];
       return requiredColumns.some((col) =>
         headers.some((header) => this.matchesColumn(header.text, col)),
       );
@@ -283,9 +283,9 @@
 
     matchesColumn(headerText, columnType) {
       const patterns = {
-        assertion: /assertion/i,
-        conclusion: /conclusion/i,
-        ctr: /ctr\d*/i,
+        assertion: /^assertion$/i,
+        conclusion: /^conclusion$/i,
+        ctr: /^ctr\d*$/i,
         ecart: /ecart|montant/i,
         compte: /compte/i,
         resultat: /r[eé]sultat/i,
@@ -355,69 +355,12 @@
     // Liste complète des 50 assertions organisées par catégories
     getAssertionCategories() {
       return {
-        "📋 Assertions Financières": [
+        "📋 Assertions": [
           "Validité",
           "Exhaustivité",
-          "Comptabilisation",
-          "Séparation des exercices",
-          "Évaluation",
-          "Classification",
-          "Droits et Obligations",
-          "Présentation et Information",
-          "Exactitude",
-          "Arithmétique"
-        ],
-        "🔐 Contrôle Interne": [
-          "Application",
-          "Permanence",
           "Formalisation",
-          "Autorisation",
-          "Approbation",
-          "Séparation des tâches",
-          "Supervision",
-          "Compétence",
-          "Habilitation",
-          "Responsabilisation"
-        ],
-        "📊 Performance & Efficacité": [
-          "Efficacité",
-          "Efficience",
-          "Économie",
-          "Qualité",
-          "Pertinence",
-          "Fiabilité",
-          "Ponctualité",
-          "Alignement Stratégique"
-        ],
-        "📝 Documentation & Traçabilité": [
-          "Traçabilité",
-          "Justification",
-          "Archivage",
-          "Réconciliation",
-          "Standardisation",
-          "Communication",
-          "Clarté",
-          "Accessibilité"
-        ],
-        "🛡️ Sécurité & Conformité": [
-          "Conformité Légale",
-          "Conformité Interne",
-          "Intégrité",
-          "Confidentialité",
-          "Disponibilité",
-          "Sécurité Physique",
-          "Sécurité Logique",
-          "Sauvegarde des actifs"
-        ],
-        "⚙️ Gouvernance & Continuité": [
-          "Continuité d'exploitation",
-          "Unicité",
-          "Indépendance",
-          "Transparence",
-          "Pérennité",
-          "Surveillance",
-          "Maîtrise des risques",
-          "Éthique"
+          "Application",
+          "Permanence"
         ]
       };
     }
@@ -875,22 +818,24 @@
     }
 
     createConsolidationTable(table) {
+      const tableId = this.generateUniqueTableId(table);
       const existingConso = this.findExistingConsoTable(table);
+      
       if (existingConso) {
-        debug.log("Table de consolidation existante trouvée");
+        debug.log(`Table de consolidation existante trouvée pour ${tableId}`);
         return;
       }
 
       const consoTable = document.createElement("table");
       // ✅ HARMONISATION CSS : Utiliser les mêmes classes que les autres tables Claraverse
       consoTable.className = "min-w-full border border-gray-200 dark:border-gray-700 rounded-lg claraverse-conso-table";
+      consoTable.dataset.forTable = tableId;
       consoTable.style.cssText = `
           margin-bottom: 1.5rem;
           border-collapse: separate;
           border-spacing: 0;
         `;
 
-      const tableId = this.generateTableId(table);
       consoTable.innerHTML = `
           <thead>
             <tr>
@@ -917,9 +862,14 @@
     }
 
     findExistingConsoTable(table) {
+      const tableId = this.generateUniqueTableId(table);
+      // Chercher d'abord par data-for-table (notre nouvel attribut stable)
+      let conso = document.querySelector(`table.claraverse-conso-table[data-for-table="${tableId}"]`);
+      if (conso) return conso;
+
+      // Fallback: chercher dans le parent
       const parent = table.parentElement;
       if (!parent) return null;
-
       return parent.querySelector(".claraverse-conso-table");
     }
 
@@ -932,12 +882,7 @@
       }
     }
 
-    generateTableId(table) {
-      return (
-        table.id ||
-        `table-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      );
-    }
+    // generateTableId removed in favor of generateUniqueTableId (hashed ID)
 
     scheduleConsolidation(table) {
       // Éviter les consolidations multiples rapides
@@ -1422,11 +1367,11 @@
       debug.log("📊 Recherche de la table conso (pour contenu simplifié)...");
 
       // Stratégie 1: Chercher par ID généré
-      const tableId = this.generateTableId(table);
+      const tableId = this.generateUniqueTableId(table);
       let consoCell = document.querySelector(`#conso-content-${tableId}`);
 
       if (consoCell) {
-        debug.log("✓ Table conso trouvée via ID:", `conso-content-${tableId}`);
+        debug.log("✓ Table conso trouvée via ID hashé:", `conso-content-${tableId}`);
         debug.log(
           "Mise à jour avec contenu simplifié:",
           simpleContent.substring(0, 100),
@@ -1582,7 +1527,7 @@
           const sibling = siblings[i];
           if (sibling.tagName === "TABLE" && sibling !== consoTable) {
             debug.log(`Examen de la table à l'index ${i}`);
-            const headers = sibling.querySelectorAll("th");
+            const headers = sibling.querySelectorAll("th, td"); // Sélecteur plus large
             for (const header of headers) {
               const headerText = header.textContent.trim().toLowerCase();
               debug.log(`En-tête trouvé: "${headerText}"`);
@@ -1590,7 +1535,18 @@
                 headerText.includes("resultat") ||
                 headerText.includes("résultat")
               ) {
-                const contentCell = sibling.querySelector("tbody td");
+                // ✅ TROUVER UNE CELLULE DE CONTENU (qui n'est pas l'en-tête lui-même)
+                const allCells = sibling.querySelectorAll("td");
+                let contentCell = null;
+                
+                for (const cell of allCells) {
+                  const cellText = cell.textContent.trim().toLowerCase();
+                  if (!cellText.includes("resultat") && !cellText.includes("résultat")) {
+                    contentCell = cell;
+                    break;
+                  }
+                }
+
                 if (contentCell) {
                   debug.log(
                     "✓ Table Résultat trouvée au-dessus de la table conso",
@@ -1618,36 +1574,39 @@
         }
       }
 
-      // Stratégie 2: Chercher toutes les tables avec en-tête "Resultats" (en excluant la table conso)
-      const allTables = document.querySelectorAll(
-        'table.min-w-full, table[class*="border"]',
-      );
+      // Stratégie 2: Chercher TOUTES les tables du document
+      const allTables = document.querySelectorAll("table");
+      debug.log(`🔍 Recherche globale: ${allTables.length} tables trouvées`);
 
       for (const potentialTable of allTables) {
-        // S'assurer que ce n'est pas la table conso
-        if (potentialTable === consoTable) {
-          debug.log("Table ignorée (c'est la table conso)");
+        // S'assurer que ce n'est pas la table conso ou la table source
+        if (potentialTable === consoTable || potentialTable === table) {
           continue;
         }
         if (potentialTable.classList.contains("claraverse-conso-table")) {
-          debug.log("Table ignorée (classe conso)");
           continue;
         }
 
-        const headers = potentialTable.querySelectorAll("th");
+        const headers = potentialTable.querySelectorAll("th, td");
         for (const header of headers) {
           const headerText = header.textContent.trim().toLowerCase();
           if (
             headerText.includes("resultat") ||
             headerText.includes("résultat")
           ) {
-            const contentCell = potentialTable.querySelector("tbody td");
+            const allCells = potentialTable.querySelectorAll("td");
+            let contentCell = null;
+            
+            for (const cell of allCells) {
+              const cellText = cell.textContent.trim().toLowerCase();
+              if (!cellText.includes("resultat") && !cellText.includes("résultat")) {
+                contentCell = cell;
+                break;
+              }
+            }
+
             if (contentCell) {
-              debug.log("✓ Table Résultat trouvée via recherche globale");
-              debug.log(
-                "Mise à jour avec contenu complet:",
-                htmlContent.substring(0, 100),
-              );
+              debug.log("✓ Table Résultat trouvée via recherche globale (S2)");
               contentCell.innerHTML = htmlContent;
               contentCell.setAttribute("data-updated", "resultat");
               return true;
@@ -1656,48 +1615,194 @@
         }
       }
 
-      // Stratégie 3: Chercher avant la table de pointage (en excluant table conso)
-      if (parent) {
-        const allSiblings = Array.from(parent.children);
-        const tableIndex = allSiblings.indexOf(table);
-
-        for (let i = tableIndex - 1; i >= 0; i--) {
-          const sibling = allSiblings[i];
-          if (
-            sibling.tagName === "TABLE" &&
-            sibling !== consoTable &&
-            !sibling.classList.contains("claraverse-conso-table")
-          ) {
-            const headers = sibling.querySelectorAll("th");
-            for (const header of headers) {
-              const headerText = header.textContent.trim().toLowerCase();
-              if (
-                headerText.includes("resultat") ||
-                headerText.includes("résultat") ||
-                headerText.includes("conclusion finale")
-              ) {
-                const contentCell = sibling.querySelector("tbody td");
-                if (contentCell) {
-                  debug.log("✓ Table Résultat trouvée avant table de pointage");
-                  debug.log(
-                    "Mise à jour avec contenu complet:",
-                    htmlContent.substring(0, 100),
-                  );
-                  contentCell.innerHTML = htmlContent;
-                  contentCell.setAttribute("data-updated", "resultat");
-
-                  // Notifier dev.js de la modification
-                  this.notifyTableUpdate(sibling, "resultat-table-update");
-
-                  return true;
+      // Stratégie 4: Chercher récursivement dans les éléments précédents (hors parent direct)
+      let prevElement = (parent || table).previousElementSibling;
+      while (prevElement) {
+        const potentialTable = prevElement.tagName === "TABLE" ? prevElement : prevElement.querySelector("table");
+        if (potentialTable && potentialTable !== consoTable && potentialTable !== table) {
+          const headers = potentialTable.querySelectorAll("th, td");
+          for (const header of headers) {
+            const headerText = header.textContent.trim().toLowerCase();
+            if (headerText.includes("resultat") || headerText.includes("résultat")) {
+              const allCells = potentialTable.querySelectorAll("td");
+              let contentCell = null;
+              for (const cell of allCells) {
+                const ct = cell.textContent.trim().toLowerCase();
+                if (!ct.includes("resultat") && !ct.includes("résultat")) {
+                  contentCell = cell;
+                  break;
                 }
               }
+              if (contentCell) {
+                debug.log("✓ Table Résultat trouvée via Strategy 4 (Siblings)");
+                contentCell.innerHTML = htmlContent;
+                contentCell.setAttribute("data-updated", "resultat");
+                return true;
+              }
+            }
+          }
+        }
+        prevElement = prevElement.previousElementSibling;
+      }
+
+      // Stratégie 5: Recherche Brute-Force par texte dans tout le document
+      debug.log("🔍 Strategy 5: Recherche par texte 'Résultats des tests'...");
+      const allTextElements = Array.from(document.querySelectorAll("div, span, th, td, p, h1, h2, h3, h4, h5, h6, b, strong"));
+      const resultHeading = allTextElements.find(el => {
+        const text = el.textContent.trim().toLowerCase();
+        return (text === "résultats des tests" || text === "resultats des tests" || text === "résultat des tests" || text.includes("résultats des tests"));
+      });
+
+      if (resultHeading) {
+        debug.log("🎯 Titre 'Résultats des tests' trouvé dans le DOM");
+        // Chercher la table la plus proche APRÈS ou proche de ce titre
+        let foundTable = null;
+        
+        // 5a. Chercher dans les frères suivants
+        let next = resultHeading.nextElementSibling;
+        for (let i = 0; i < 5 && next && !foundTable; i++) {
+          foundTable = next.tagName === "TABLE" ? next : next.querySelector("table");
+          next = next.nextElementSibling;
+        }
+
+        // 5b. Chercher dans le parent
+        if (!foundTable) {
+          const parentEl = resultHeading.parentElement;
+          if (parentEl) foundTable = parentEl.querySelector("table");
+        }
+
+        if (foundTable && foundTable !== table && foundTable !== consoTable) {
+          const allCells = foundTable.querySelectorAll("td");
+          let contentCell = null;
+          for (const cell of allCells) {
+            const ct = cell.textContent.trim().toLowerCase();
+            if (!ct.includes("resultat") && !ct.includes("résultat")) {
+              contentCell = cell;
+              break;
+            }
+          }
+
+          if (contentCell) {
+            debug.log("✓ Table Résultat trouvée via Strategy 5 (Proximity)");
+            contentCell.innerHTML = htmlContent;
+            contentCell.setAttribute("data-updated", "resultat");
+            foundTable.style.outline = "3px solid #00ff00";
+            setTimeout(() => foundTable.style.outline = "", 2000);
+            return true;
+          }
+        }
+      }
+
+      // Stratégie 6: Recherche Document-Wide sans conditions de proximité
+      debug.log("🔍 Strategy 6: Recherche exhaustive de n'importe quelle table de résultat...");
+      const finalTryTables = document.querySelectorAll("table");
+      for (const t of finalTryTables) {
+        if (t === table || t === consoTable || t.classList.contains("claraverse-conso-table")) continue;
+        
+        const text = t.textContent.toLowerCase();
+        if (text.includes("résultats des tests") || text.includes("résultat des tests")) {
+          const cells = t.querySelectorAll("td");
+          for (const cell of cells) {
+            const ct = cell.textContent.trim().toLowerCase();
+            if (!ct.includes("resultat") && !ct.includes("résultat")) {
+              debug.log("✓ Table Résultat trouvée via Strategy 6 (Content Match)");
+              cell.innerHTML = htmlContent;
+              cell.setAttribute("data-updated", "resultat");
+              t.style.outline = "3px solid #0000ff";
+              setTimeout(() => t.style.outline = "", 2000);
+              return true;
             }
           }
         }
       }
 
-      debug.warn("✗ Table Résultat non trouvée");
+      // Stratégie 7: Utiliser la table CONSO comme repère (Ultra-fiable)
+      if (consoTable) {
+        debug.log("🔍 Strategy 7: Recherche à partir de la table CONSO...");
+        let prev = consoTable.previousElementSibling;
+        // Remonter jusqu'à 5 éléments au-dessus de la table de consolidation
+        for (let i = 0; i < 5 && prev; i++) {
+          const text = prev.textContent.toLowerCase();
+          if (text.includes("résultat") || text.includes("resultat")) {
+            debug.log(`🎯 Élément avec 'résultat' trouvé au-dessus de CONSO (S7): ${prev.tagName}`);
+            
+            // Si c'est une table, chercher la cellule de contenu
+            if (prev.tagName === "TABLE") {
+               const cells = prev.querySelectorAll("td");
+               for (const cell of cells) {
+                 if (!cell.textContent.toLowerCase().includes("résultat")) {
+                   cell.innerHTML = htmlContent;
+                   cell.setAttribute("data-updated", "resultat");
+                   prev.style.outline = "3px solid #ff00ff";
+                   return true;
+                 }
+               }
+            } else {
+               // Si c'est un autre élément (div, etc.), il contient peut-être la table ou est le conteneur
+               const internalTable = prev.querySelector("table");
+               if (internalTable) {
+                  const cells = internalTable.querySelectorAll("td");
+                  for (const cell of cells) {
+                    if (!cell.textContent.toLowerCase().includes("résultat")) {
+                      cell.innerHTML = htmlContent;
+                      cell.setAttribute("data-updated", "resultat");
+                      internalTable.style.outline = "3px solid #ff00ff";
+                      return true;
+                    }
+                  }
+               }
+               // Fallback: si l'élément APRES celui-ci est le conteneur de données
+               const dataContainer = prev.nextElementSibling;
+               if (dataContainer && dataContainer !== consoTable) {
+                  dataContainer.innerHTML = htmlContent;
+                  dataContainer.setAttribute("data-updated", "resultat");
+                  dataContainer.style.outline = "3px solid #ff00ff";
+                  return true;
+               }
+            }
+          }
+          prev = prev.previousElementSibling;
+        }
+      }
+
+      // Stratégie 8: Recherche par n'importe quelle table ayant "tests" ou "résultats" n'importe où
+      const candidates = Array.from(document.querySelectorAll("table"));
+      for (const t of candidates) {
+        if (t === table || t === consoTable || t.classList.contains("claraverse-conso-table")) continue;
+        if (t.textContent.toLowerCase().includes("tests") || t.textContent.toLowerCase().includes("result")) {
+          const cells = t.querySelectorAll("td");
+          if (cells.length > 0) {
+             const cell = cells[cells.length - 1]; // On prend la dernière cellule si incertain
+             cell.innerHTML = htmlContent;
+             cell.setAttribute("data-updated", "resultat-S8");
+             t.style.outline = "3px solid orange";
+             debug.log("✓ Table Résultat trouvée via Strategy 8 (Keyword Fallback)");
+             return true;
+          }
+        }
+      }
+
+      // ULTIME RECOURS: Chercher la toute première table au-dessus de la table de pointage
+      debug.log("🔍 Ultime recours: recherche de la table immédiatement supérieure...");
+      let el = table.parentElement;
+      while (el && el !== document.body) {
+        const potential = el.querySelectorAll("table");
+        for (const t of potential) {
+          if (t !== table && t !== consoTable && !t.classList.contains("claraverse-conso-table")) {
+            const cells = t.querySelectorAll("td");
+            if (cells.length > 0) {
+              cells[0].innerHTML = htmlContent;
+              cells[0].setAttribute("data-updated", "resultat-final");
+              t.style.outline = "3px solid red";
+              debug.log("✓ Données injectées dans la table supérieure par défaut");
+              return true;
+            }
+          }
+        }
+        el = el.parentElement;
+      }
+
+      debug.warn("✗ Table Résultat non trouvée après TOUTES les stratégies (1-8 + Fallback)");
       return false;
     }
 
@@ -1813,6 +1918,19 @@
         hash = hash & hash;
       }
       return Math.abs(hash).toString(36);
+    }
+
+    /**
+     * Calculer la distance approximative entre deux éléments dans le DOM
+     */
+    getElementDistance(el1, el2) {
+      const rect1 = el1.getBoundingClientRect();
+      const rect2 = el2.getBoundingClientRect();
+
+      const dx = rect1.left - rect2.left;
+      const dy = rect1.top - rect2.top;
+
+      return Math.sqrt(dx * dx + dy * dy);
     }
 
     /**
@@ -2291,8 +2409,7 @@
           detail: {
             table: tableElement,
             tableId:
-              this.generateTableId(tableElement) ||
-              this.generateUniqueTableId(),
+              this.generateUniqueTableId(tableElement),
             source: "conso",
             updateType: updateType,
             timestamp: Date.now(),
@@ -2360,7 +2477,7 @@
           const resultatTables = Array.from(
             document.querySelectorAll("table"),
           ).filter((t) => {
-            const headers = t.querySelectorAll("th");
+            const headers = t.querySelectorAll("th, td"); // Sélecteur plus large
             return Array.from(headers).some(
               (h) =>
                 h.textContent.toLowerCase().includes("resultat") ||
