@@ -804,7 +804,75 @@ export class ClaraApiService {
 
     // ========================================================================
     // FORMAT 6: CIA QCM — Array with "Etape mission - CIA" containing tables
+    // OU format avec erreur contenant du JSON dans un bloc markdown
     // ========================================================================
+    
+    // Cas 1: Erreur avec JSON brut dans un bloc markdown (QCM)
+    if (
+      Array.isArray(result) &&
+      result.length > 0 &&
+      result[0] &&
+      typeof result[0] === "object" &&
+      "error" in result[0] &&
+      "raw" in result[0]
+    ) {
+      console.log('🔧 FORMAT 6 SPECIAL: Réponse QCM avec JSON dans bloc markdown');
+      try {
+        const rawContent = result[0].raw;
+        // Extraire le JSON du bloc markdown ```json...```
+        const jsonMatch = rawContent.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+          const cleanJson = jsonMatch[1].trim();
+          const parsedData = JSON.parse(cleanJson);
+          
+          // Vérifier si c'est bien une structure CIA QCM
+          if (parsedData && typeof parsedData === "object" && "Etape mission - CIA" in parsedData) {
+            // Convertir en array si c'est un objet unique
+            const dataArray = Array.isArray(parsedData) ? parsedData : [parsedData];
+            
+            const etapeMission = dataArray[0]["Etape mission - CIA"];
+            let totalQuestions = 0;
+            
+            // Compter le nombre total de questions
+            if (Array.isArray(etapeMission)) {
+              etapeMission.forEach((tableObj: any) => {
+                Object.keys(tableObj).forEach((tableKey) => {
+                  const rows = tableObj[tableKey];
+                  if (Array.isArray(rows)) {
+                    const questionRows = rows.filter((row: any) => row.Question && row.Option);
+                    totalQuestions += questionRows.length;
+                  }
+                });
+              });
+            }
+            
+            console.log("✅ JSON QCM extrait et parsé avec succès");
+            console.log("📊 Structure détectée:", {
+              tablesCount: etapeMission?.length || 0,
+              totalQuestions: totalQuestions,
+            });
+            
+            const content = `__CIA_QCM_ACCORDION__${JSON.stringify(dataArray)}`;
+            console.log("🔍 === FIN ANALYSE (FORMAT 6 - CIA QCM Accordion depuis markdown) ===");
+            return {
+              content,
+              metadata: {
+                format: "cia_qcm_accordion",
+                timestamp: new Date().toISOString(),
+                qcmGroupsCount: etapeMission?.length || 0,
+                totalQuestions: totalQuestions,
+                endpoint: "qcm_cia_gemini",
+                extractedFromMarkdown: true,
+              },
+            };
+          }
+        }
+      } catch (e) {
+        console.error("❌ Échec de l'extraction du JSON QCM depuis le bloc markdown:", e);
+      }
+    }
+    
+    // Cas 2: Format normal avec structure directe (QCM)
     if (
       Array.isArray(result) &&
       result.length > 0 &&
