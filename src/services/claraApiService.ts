@@ -499,10 +499,37 @@ export class ClaraApiService {
             key.toLowerCase().includes("etape") ||
             key.toLowerCase().includes("mission") ||
             key.toLowerCase().includes("programme") ||
-            key.toLowerCase().includes("recos"),
+            key.toLowerCase().includes("recos") ||
+            key.toLowerCase().includes("tableau"),
         ) || Object.keys(data)[0]; // Fallback sur la première clé
 
       console.log(`🔍 Clé principale détectée: "${etapeMissionKey}"`);
+
+      // 🔧 NOUVEAU FORMAT: Programme contrôle comptes avec "Tableau entete" et "Tableau processus" directement dans data
+      // Détecter si data contient directement des clés "Tableau entete" et "Tableau processus"
+      const hasTableauEntete = "Tableau entete" in data;
+      const hasTableauProcessus = "Tableau processus" in data;
+      
+      if (hasTableauEntete && hasTableauProcessus) {
+        console.log("🔧 FORMAT PROGRAMME CONTROLE COMPTES DÉTECTÉ: Tableau entete + Tableau processus");
+        
+        // Traiter "Tableau entete" comme une table header
+        const tableauEntete = data["Tableau entete"];
+        if (tableauEntete && typeof tableauEntete === 'object') {
+          console.log("📋 Traitement de 'Tableau entete' (type: header)");
+          markdown += this.convertHeaderTableToMarkdown(tableauEntete, 0);
+        }
+        
+        // Traiter "Tableau processus" comme une table data_array SANS titre
+        const tableauProcessus = data["Tableau processus"];
+        if (Array.isArray(tableauProcessus)) {
+          console.log(`📋 Traitement de 'Tableau processus' (type: data_array, ${tableauProcessus.length} items)`);
+          // Passer une chaîne vide comme titre pour ne pas afficher de section
+          markdown += this.convertArrayTableToMarkdown("", tableauProcessus);
+        }
+        
+        return markdown;
+      }
 
       const etapeMission = data[etapeMissionKey];
       if (!Array.isArray(etapeMission)) {
@@ -641,7 +668,7 @@ export class ClaraApiService {
       });
 
       console.log(`✅ Table 1 générée (${md.length} caractères)`);
-      return md + "\n\n";
+      return md + "\n";
     }
     
     // Tables 2+ (index > 0) : Format 1 colonne avec en-tête en HTML
@@ -692,13 +719,13 @@ export class ClaraApiService {
    */
   private convertArrayTableToMarkdown(tableName: string, data: any[]): string {
     if (!data || data.length === 0) {
-      return `### ${tableName}\n\n*Aucune donnée disponible*\n\n`;
+      return tableName ? `### ${tableName}\n\n*Aucune donnée disponible*\n\n` : "";
     }
 
-    console.log(`🔄 Conversion de ${tableName} avec ${data.length} lignes`);
+    console.log(`🔄 Conversion de ${tableName || '(sans titre)'} avec ${data.length} lignes`);
 
-    // Titre de la section avec emoji approprié
-    let md = `### ${tableName}\n\n`;
+    // Titre de la section avec emoji approprié (seulement si tableName est fourni)
+    let md = tableName ? `### ${tableName}\n\n` : "";
 
     // Extraire les colonnes du premier élément
     const firstItem = data[0];
