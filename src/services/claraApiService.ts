@@ -209,11 +209,11 @@ export class ClaraApiService {
       case "database_endpoint":
         return "https://t22wtwxl.rpcld.app/webhook/integration_database";
       case "cia_cours":
-        return "http://localhost:5678/webhook/cia_cours_gemini";
+        return "https://t22wtwxl.rpcld.app/webhook/cia_cours_gemini";
       case "cia_qcm":
-        return "http://localhost:5678/webhook/qcm_cia_gemini";
+        return "https://t22wtwxl.rpcld.app/webhook/qcm_cia_gemini";
       case "cia_synthese":
-        return "http://localhost:5678/webhook/synthese_cia_gemini";
+        return "https://t22wtwxl.rpcld.app/webhook/synthese_cia_gemini";
       case "algorithme":
         return "https://t22wtwxl.rpcld.app/webhook/algorithme";
       case "visualisation":
@@ -247,17 +247,17 @@ export class ClaraApiService {
       case "rapport_synthese_cac":
         return "https://t22wtwxl.rpcld.app/webhook/rapport_synthese_cac";
       case "methodo_audit":
-        return "http://localhost:5678/webhook/methodo_audit";
+        return "https://t22wtwxl.rpcld.app/webhook/methodo_audit";
       case "guide_des_commandes":
-        return "http://localhost:5678/webhook/guide_des_commandes";
+        return "https://t22wtwxl.rpcld.app/webhook/guide_des_commandes";
       case "guide_intelligent":
-        return "http://localhost:5678/webhook/guide_intelligent";
+        return "https://t22wtwxl.rpcld.app/webhook/guide_intelligent";
       case "guide_menu_contextuel":
-        return "http://localhost:5678/webhook/guide_menu_contextuel";
+        return "https://t22wtwxl.rpcld.app/webhook/guide_menu_contextuel";
       case "guide_produit":
-        return "http://localhost:5678/webhook/guide_produit";
+        return "https://t22wtwxl.rpcld.app/webhook/guide_produit";
       case "methodo_revision":
-        return "http://localhost:5678/webhook/methodo_revision";
+        return "https://t22wtwxl.rpcld.app/webhook/methodo_revision";
       case "default":
       default:
         return this.n8nDefaultEndpoint;
