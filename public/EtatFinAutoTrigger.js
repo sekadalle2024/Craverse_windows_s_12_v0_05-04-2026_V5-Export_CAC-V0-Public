@@ -362,7 +362,36 @@
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
+   * Ajoute un gestionnaire de clic sur la cellule de la table
+   */
+  function addCellClickHandler(table) {
+    const cell = table.querySelector('td');
+    if (cell) {
+      cell.style.cursor = 'pointer';
+      cell.title = 'Cliquer pour sélectionner un fichier Balance Excel';
+      
+      cell.addEventListener('click', function() {
+        console.log("🖱️ Clic sur cellule Etat_fin détecté");
+        
+        // Vérifier si la table n'est pas déjà en cours de traitement
+        const currentStatus = table.getAttribute(CONFIG.PROCESSED_ATTR);
+        if (currentStatus === 'processing' || currentStatus === 'completed') {
+          console.log("⏭️ Table déjà en cours de traitement ou complétée");
+          return;
+        }
+        
+        // Réinitialiser l'attribut pour permettre le traitement
+        table.removeAttribute(CONFIG.PROCESSED_ATTR);
+        processEtatFinTable(table);
+      });
+      
+      console.log("✅ Gestionnaire de clic ajouté sur la cellule");
+    }
+  }
+
+  /**
    * Scan toutes les tables et traite les tables Etat_fin
+   * MODE: DÉCLENCHEMENT AUTOMATIQUE + Clic sur cellule
    */
   function scanAndProcess() {
     const allTables = document.querySelectorAll(CONFIG.SELECTORS.CHAT_TABLES);
@@ -370,6 +399,11 @@
     allTables.forEach((table) => {
       if (isEtatFinTable(table) && !table.getAttribute(CONFIG.PROCESSED_ATTR)) {
         console.log("🎯 Table Etat_fin détectée - Déclenchement automatique");
+        
+        // Ajouter le gestionnaire de clic AVANT le traitement automatique
+        addCellClickHandler(table);
+        
+        // Déclencher automatiquement le traitement
         processEtatFinTable(table);
       }
     });

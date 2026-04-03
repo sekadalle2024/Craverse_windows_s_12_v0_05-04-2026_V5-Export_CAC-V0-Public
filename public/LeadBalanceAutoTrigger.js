@@ -343,19 +343,49 @@
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
+   * Ajoute un gestionnaire de clic sur la cellule de la table
+   */
+  function addCellClickHandler(table) {
+    const cell = table.querySelector('td');
+    if (cell) {
+      cell.style.cursor = 'pointer';
+      cell.title = 'Cliquer pour sélectionner un fichier Excel';
+      
+      cell.addEventListener('click', function() {
+        console.log("🖱️ Clic sur cellule Lead_balance détecté");
+        
+        // Vérifier si la table n'est pas déjà en cours de traitement
+        const currentStatus = table.getAttribute(CONFIG.PROCESSED_ATTR);
+        if (currentStatus === 'processing' || currentStatus === 'completed') {
+          console.log("⏭️ Table déjà en cours de traitement ou complétée");
+          return;
+        }
+        
+        // Réinitialiser l'attribut pour permettre le traitement
+        table.removeAttribute(CONFIG.PROCESSED_ATTR);
+        processLeadBalanceTable(table);
+      });
+      
+      console.log("✅ Gestionnaire de clic ajouté sur la cellule");
+    }
+  }
+
+  /**
    * Scan toutes les tables et traite les tables Lead_balance
-   * MODE: Menu contextuel uniquement (pas de déclenchement automatique)
+   * MODE: DÉCLENCHEMENT AUTOMATIQUE + Clic sur cellule
    */
   function scanAndProcess() {
     const allTables = document.querySelectorAll(CONFIG.SELECTORS.CHAT_TABLES);
 
     allTables.forEach((table) => {
       if (isLeadBalanceTable(table) && !table.getAttribute(CONFIG.PROCESSED_ATTR)) {
-        console.log("🎯 Table Lead_balance détectée - Menu contextuel disponible");
-        // Marquer la table comme détectée mais ne pas déclencher automatiquement
-        table.setAttribute(CONFIG.PROCESSED_ATTR, 'detected');
-        // Ajouter un attribut pour le menu contextuel
-        table.setAttribute('data-lead-balance-ready', 'true');
+        console.log("🎯 Table Lead_balance détectée - Déclenchement automatique");
+        
+        // Ajouter le gestionnaire de clic AVANT le traitement automatique
+        addCellClickHandler(table);
+        
+        // Déclencher automatiquement le traitement
+        processLeadBalanceTable(table);
       }
     });
   }
