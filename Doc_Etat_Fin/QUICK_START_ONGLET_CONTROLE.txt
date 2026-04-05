@@ -1,0 +1,132 @@
+================================================================================
+🚀 QUICK START - ONGLET CONTRÔLE DE COHÉRENCE
+================================================================================
+
+✅ FONCTIONNALITÉ AJOUTÉE - 05 Avril 2026
+
+================================================================================
+📋 CE QUI A ÉTÉ AJOUTÉ
+================================================================================
+
+Un nouvel onglet "Contrôle de cohérence" est automatiquement créé dans chaque
+export de la liasse officielle Excel.
+
+Contenu : 16 états de contrôle organisés en 6 sections
+Position : Premier onglet du fichier Excel
+Format : Tableau Excel avec styles professionnels
+
+================================================================================
+🎯 COMMENT L'UTILISER
+================================================================================
+
+MÉTHODE 1 : Via Menu Contextuel
+--------------------------------
+
+1. Générer les états financiers :
+   - Taper "Etat fin" dans le chat
+   - Sélectionner fichier Balance Excel
+
+2. Exporter la liasse :
+   - Clic droit sur la table
+   - "📥 Exporter liasse officielle"
+
+3. Ouvrir le fichier Excel téléchargé :
+   - Premier onglet = "Contrôle de cohérence"
+   - Contient les 16 états de contrôle
+
+MÉTHODE 2 : Via Script Python
+------------------------------
+
+cd py_backend
+conda activate claraverse_backend
+python generer_etats_liasse.py
+
+→ Fichier HTML généré sur le Bureau
+→ Option d'export Excel avec onglet "Contrôle de cohérence"
+
+================================================================================
+📊 CONTENU DE L'ONGLET
+================================================================================
+
+SECTION 1 : CONTRÔLES BILAN ACTIF (3 états)
+  ✅ État 1 : Bilan Actif N
+  ✅ État 2 : Bilan Actif N-1
+  ✅ État 3 : Variation
+
+SECTION 2 : CONTRÔLES BILAN PASSIF (3 états)
+  ✅ État 4 : Bilan Passif N
+  ✅ État 5 : Bilan Passif N-1
+  ✅ État 6 : Variation
+
+SECTION 3 : CONTRÔLES COMPTE DE RÉSULTAT (3 états)
+  ✅ État 7 : CR N
+  ✅ État 8 : CR N-1
+  ✅ État 9 : Variation
+
+SECTION 4 : CONTRÔLES TFT (3 états)
+  ✅ État 10 : TFT N
+  ✅ État 11 : TFT N-1
+  ✅ État 12 : Variation
+
+SECTION 5 : CONTRÔLES SENS DES COMPTES (2 états)
+  ✅ État 13 : Sens N
+  ✅ État 14 : Sens N-1
+
+SECTION 6 : CONTRÔLES ÉQUILIBRE BILAN (2 états)
+  ✅ État 15 : Équilibre N
+  ✅ État 16 : Équilibre N-1
+
+================================================================================
+🧪 TESTER
+================================================================================
+
+Test rapide :
+
+# Vérifier le module
+cd py_backend
+python -c "from generer_onglet_controle_coherence import ajouter_onglet_controle_coherence; print('✅ Module OK')"
+
+# Test complet
+conda activate claraverse_backend
+python generer_etats_liasse.py
+
+# Ouvrir le fichier généré sur le Bureau
+# Vérifier l'onglet "Contrôle de cohérence"
+
+================================================================================
+📚 DOCUMENTATION
+================================================================================
+
+Guide complet :
+  📖 Doc_Etat_Fin/00_ONGLET_CONTROLE_COHERENCE_05_AVRIL_2026.txt
+
+Scripts :
+  📝 py_backend/generer_onglet_controle_coherence.py
+  📝 py_backend/export_liasse.py (modifié)
+
+================================================================================
+✅ AVANTAGES
+================================================================================
+
+✅ Cohérence totale avec le menu accordéon frontend
+✅ Tous les contrôles dans un seul onglet
+✅ Format Excel professionnel
+✅ Facile à consulter et imprimer
+✅ Traçabilité complète
+✅ Conformité SYSCOHADA Révisé
+
+================================================================================
+⚠️ NOTES
+================================================================================
+
+- L'onglet est créé automatiquement à chaque export
+- Si une erreur survient, l'export continue sans l'onglet
+- Les données proviennent des mêmes calculs que le frontend
+- Format identique au menu accordéon
+
+================================================================================
+
+L'onglet "Contrôle de cohérence" est maintenant intégré dans tous les exports
+de la liasse officielle !
+
+================================================================================

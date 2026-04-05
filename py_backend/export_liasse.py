@@ -5,6 +5,7 @@ Module d'export de la liasse officielle Excel remplie avec les valeurs calculée
 import pandas as pd
 import openpyxl
 from openpyxl import load_workbook
+from openpyxl.cell.cell import MergedCell
 import os
 import shutil
 from pathlib import Path
@@ -15,6 +16,12 @@ from typing import Dict, Any, Optional
 import logging
 import base64
 import io
+
+# Import du module de génération de l'onglet contrôle de cohérence
+from generer_onglet_controle_coherence import (
+    ajouter_onglet_controle_coherence,
+    generer_etats_controle_pour_export
+)
 
 logger = logging.getLogger("export_liasse")
 
@@ -217,70 +224,182 @@ def remplir_liasse_officielle(results: Dict[str, Any], nom_entreprise: str, exer
     # Charger le workbook
     wb = load_workbook(template_path)
     
+    # Log des onglets disponibles
+    logger.info(f"📋 Onglets disponibles: {wb.sheetnames[:10]}...")  # Premiers 10 onglets
+    
+    # Log du format des données reçues
+    logger.info(f"📊 Données reçues - Clés: {list(results.keys())}")
+    if 'bilan_actif' in results:
+        logger.info(f"   Type bilan_actif: {type(results.get('bilan_actif'))}")
+        if isinstance(results.get('bilan_actif'), list):
+            logger.info(f"   Bilan actif (LIST): {len(results['bilan_actif'])} postes")
+        elif isinstance(results.get('bilan_actif'), dict):
+            logger.info(f"   Bilan actif (DICT): {len(results['bilan_actif'])} postes")
+    
+    # ==================== CONVERSION FORMAT DONNÉES ====================
+    # Convertir LIST en DICT si nécessaire (etats_financiers_v2.py retourne des listes)
+    
+    def convert_list_to_dict(data):
+        """Convertit une liste de postes en dictionnaire {ref: poste}"""
+        if isinstance(data, list):
+            return {poste['ref']: poste for poste in data}
+        return data if isinstance(data, dict) else {}
+    
+    bilan_actif_dict = convert_list_to_dict(results.get('bilan_actif', {}))
+    bilan_passif_dict = convert_list_to_dict(results.get('bilan_passif', {}))
+    charges_dict = convert_list_to_dict(results.get('charges', {}))
+    produits_dict = convert_list_to_dict(results.get('produits', {}))
+    
+    logger.info(f"📊 Données converties:")
+    logger.info(f"   - Bilan Actif: {len(bilan_actif_dict)} postes")
+    logger.info(f"   - Bilan Passif: {len(bilan_passif_dict)} postes")
+    logger.info(f"   - Charges: {len(charges_dict)} postes")
+    logger.info(f"   - Produits: {len(produits_dict)} postes")
+    
+    # ==================== FONCTION POUR ÉCRIRE DANS CELLULE ====================
+    
+    def write_to_cell(ws, cell_addr, value):
+        """
+        Écrit une valeur dans une cellule en gérant les cellules fusionnées
+        
+        Args:
+            ws: Worksheet
+            cell_addr: Adresse de la cellule (ex: 'C10')
+            value: Valeur à écrire
+        
+        Returns:
+            bool: True si succès, False sinon
+        """
+        try:
+            cell = ws[cell_addr]
+            
+            # Vérifier si c'est une cellule fusionnée
+            if isinstance(cell, openpyxl.cell.cell.MergedCell):
+                # Trouver la cellule principale de la fusion
+                for merged_range in ws.merged_cells.ranges:
+                    if cell_addr in merged_range:
+                        # Écrire dans la cellule en haut à gauche de la fusion
+                        top_left_cell = merged_range.start_cell
+                        ws.cell(top_left_cell.row, top_left_cell.column, value)
+                        return True
+                return False
+            else:
+                # Cellule normale
+                ws[cell_addr] = value
+                return True
+        except Exception as e:
+            logger.warning(f"   Erreur écriture {cell_addr}: {e}")
+            return False
+    
+    # ==================== REMPLISSAGE DES ONGLETS ====================
+    
     # Remplir les informations générales
-    if 'Bilan' in wb.sheetnames:
-        ws_bilan = wb['Bilan']
+    if 'BILAN' in wb.sheetnames:
+        ws_bilan = wb['BILAN']
         # Cellules pour nom entreprise et exercice (à adapter selon le template)
-        # ws_bilan['A1'] = nom_entreprise
-        # ws_bilan['A2'] = f"Exercice {exercice}"
+        write_to_cell(ws_bilan, 'C3', nom_entreprise)
+        write_to_cell(ws_bilan, 'E5', f"{exercice}")
     
     # Remplir le BILAN - ACTIF
-    if 'Bilan' in wb.sheetnames:
-        ws_bilan = wb['Bilan']
-        logger.info("📝 Remplissage Bilan Actif...")
+    if 'ACTIF' in wb.sheetnames:
+        ws_actif = wb['ACTIF']
+        logger.info("📝 Remplissage ACTIF...")
+        
+        compteur_ok = 0
+        compteur_erreur = 0
         
         for ref, cellule in MAPPING_BILAN_ACTIF.items():
-            if ref in results.get('bilan_actif', {}):
-                montant = results['bilan_actif'][ref]['montant']
-                try:
-                    ws_bilan[cellule] = montant
-                    logger.debug(f"   {ref} -> {cellule}: {montant:,.2f}")
-                except Exception as e:
-                    logger.warning(f"   Erreur {ref} -> {cellule}: {e}")
+            if ref in bilan_actif_dict:
+                # Récupérer le montant (montant_n ou montant)
+                poste = bilan_actif_dict[ref]
+                montant = poste.get('montant_n', poste.get('montant', 0))
+                
+                if write_to_cell(ws_actif, cellule, montant):
+                    compteur_ok += 1
+                    logger.debug(f"   ✅ {ref} -> {cellule}: {montant:,.2f}")
+                else:
+                    compteur_erreur += 1
+        
+        logger.info(f"   ✅ ACTIF: {compteur_ok} cellules remplies, {compteur_erreur} erreurs")
     
     # Remplir le BILAN - PASSIF
-    if 'Bilan' in wb.sheetnames:
-        ws_bilan = wb['Bilan']
-        logger.info("📝 Remplissage Bilan Passif...")
+    if 'PASSIF' in wb.sheetnames:
+        ws_passif = wb['PASSIF']
+        logger.info("📝 Remplissage PASSIF...")
+        
+        compteur_ok = 0
+        compteur_erreur = 0
         
         for ref, cellule in MAPPING_BILAN_PASSIF.items():
-            if ref in results.get('bilan_passif', {}):
-                montant = results['bilan_passif'][ref]['montant']
-                try:
-                    ws_bilan[cellule] = montant
-                    logger.debug(f"   {ref} -> {cellule}: {montant:,.2f}")
-                except Exception as e:
-                    logger.warning(f"   Erreur {ref} -> {cellule}: {e}")
+            if ref in bilan_passif_dict:
+                poste = bilan_passif_dict[ref]
+                montant = poste.get('montant_n', poste.get('montant', 0))
+                
+                if write_to_cell(ws_passif, cellule, montant):
+                    compteur_ok += 1
+                    logger.debug(f"   ✅ {ref} -> {cellule}: {montant:,.2f}")
+                else:
+                    compteur_erreur += 1
+        
+        logger.info(f"   ✅ PASSIF: {compteur_ok} cellules remplies, {compteur_erreur} erreurs")
     
     # Remplir le COMPTE DE RÉSULTAT - CHARGES
-    if 'Compte de résultat' in wb.sheetnames or 'CR' in wb.sheetnames:
-        ws_cr = wb.get('Compte de résultat', wb.get('CR'))
-        if ws_cr:
-            logger.info("📝 Remplissage Compte de Résultat - Charges...")
-            
-            for ref, cellule in MAPPING_COMPTE_RESULTAT_CHARGES.items():
-                if ref in results.get('charges', {}):
-                    montant = results['charges'][ref]['montant']
-                    try:
-                        ws_cr[cellule] = montant
-                        logger.debug(f"   {ref} -> {cellule}: {montant:,.2f}")
-                    except Exception as e:
-                        logger.warning(f"   Erreur {ref} -> {cellule}: {e}")
+    if 'RESULTAT' in wb.sheetnames:
+        ws_resultat = wb['RESULTAT']
+        logger.info("📝 Remplissage RESULTAT - Charges...")
+        
+        compteur_ok = 0
+        compteur_erreur = 0
+        
+        for ref, cellule in MAPPING_COMPTE_RESULTAT_CHARGES.items():
+            if ref in charges_dict:
+                poste = charges_dict[ref]
+                montant = poste.get('montant_n', poste.get('montant', 0))
+                
+                if write_to_cell(ws_resultat, cellule, montant):
+                    compteur_ok += 1
+                    logger.debug(f"   ✅ {ref} -> {cellule}: {montant:,.2f}")
+                else:
+                    compteur_erreur += 1
+        
+        logger.info(f"   ✅ RESULTAT Charges: {compteur_ok} cellules remplies, {compteur_erreur} erreurs")
     
     # Remplir le COMPTE DE RÉSULTAT - PRODUITS
-    if 'Compte de résultat' in wb.sheetnames or 'CR' in wb.sheetnames:
-        ws_cr = wb.get('Compte de résultat', wb.get('CR'))
-        if ws_cr:
-            logger.info("📝 Remplissage Compte de Résultat - Produits...")
-            
-            for ref, cellule in MAPPING_COMPTE_RESULTAT_PRODUITS.items():
-                if ref in results.get('produits', {}):
-                    montant = results['produits'][ref]['montant']
-                    try:
-                        ws_cr[cellule] = montant
-                        logger.debug(f"   {ref} -> {cellule}: {montant:,.2f}")
-                    except Exception as e:
-                        logger.warning(f"   Erreur {ref} -> {cellule}: {e}")
+    if 'RESULTAT' in wb.sheetnames:
+        ws_resultat = wb['RESULTAT']
+        logger.info("📝 Remplissage RESULTAT - Produits...")
+        
+        compteur_ok = 0
+        compteur_erreur = 0
+        
+        for ref, cellule in MAPPING_COMPTE_RESULTAT_PRODUITS.items():
+            if ref in produits_dict:
+                poste = produits_dict[ref]
+                montant = poste.get('montant_n', poste.get('montant', 0))
+                
+                if write_to_cell(ws_resultat, cellule, montant):
+                    compteur_ok += 1
+                    logger.debug(f"   ✅ {ref} -> {cellule}: {montant:,.2f}")
+                else:
+                    compteur_erreur += 1
+        
+        logger.info(f"   ✅ RESULTAT Produits: {compteur_ok} cellules remplies, {compteur_erreur} erreurs")
+    
+    # ==================== AJOUT ONGLET CONTRÔLE DE COHÉRENCE ====================
+    logger.info("📊 Ajout de l'onglet 'Contrôle de cohérence'...")
+    try:
+        # Générer les 16 états de contrôle
+        etats_controle = generer_etats_controle_pour_export(results)
+        
+        # Ajouter l'onglet au workbook
+        ajouter_onglet_controle_coherence(wb, etats_controle)
+        
+        logger.info("✅ Onglet 'Contrôle de cohérence' ajouté avec succès")
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de l'ajout de l'onglet Contrôle de cohérence: {e}", exc_info=True)
+        logger.warning("⚠️ L'export continue sans l'onglet Contrôle de cohérence")
+    
+    # ==================== FIN AJOUT ONGLET ====================
     
     # Sauvegarder dans un buffer
     output = io.BytesIO()

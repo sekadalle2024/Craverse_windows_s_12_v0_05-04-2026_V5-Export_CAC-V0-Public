@@ -1,0 +1,336 @@
+================================================================================
+DIAGNOSTIC: LIASSE EXPORTÉE VIDE - AUCUNE DONNÉE
+================================================================================
+
+Date: 05 Avril 2026
+Statut: 🔍 EN DIAGNOSTIC
+Problème: Le fichier Excel exporté est au bon format mais ne contient aucune donnée
+
+================================================================================
+CONTEXTE
+================================================================================
+
+Tâches précédentes accomplies:
+  ✅ TASK 1: Modification du template d'export (Liasse_officielle_revise.xlsx)
+  ✅ TASK 2: Ajout onglet "Contrôle de cohérence" dans l'export
+
+Problème actuel:
+  ❌ La liasse exportée ne contient aucune donnée
+  ✅ Le fichier est au bon format (nouveau template)
+  ❌ Les cellules sont vides
+
+================================================================================
+HYPOTHÈSES DU PROBLÈME
+================================================================================
+
+Hypothèse 1: Format des données results incorrect
+--------------------------------------------------
+Le dictionnaire results passé à remplir_liasse_officielle() n'est pas au bon format.
+
+Format attendu par export_liasse.py:
+```python
+results = {
+    'bilan_actif': {
+        'AD': {'ref': 'AD', 'libelle': '...', 'montant': 123456},
+        'AE': {'ref': 'AE', 'libelle': '...', 'montant': 789012},
+        ...
+    },
+    'bilan_passif': {...},
+    'charges': {...},
+    'produits': {...}
+}
+```
+
+Format généré par etats_financiers_v2.py:
+```python
+results = {
+    'compte_resultat': [
+        {'ref': 'TA', 'libelle': '...', 'montant_n': 123, 'montant_n1': 456},
+        ...
+    ],
+    'bilan_actif': [
+        {'ref': 'AD', 'libelle': '...', 'montant_n': 123, 'montant_n1': 456},
+        ...
+    ],
+    'bilan_passif': [...]
+}
+```
+
+⚠️ INCOMPATIBILITÉ DÉTECTÉE:
+  - export_liasse.py attend un DICT avec clés = refs de postes
+  - etats_financiers_v2.py retourne une LIST de dicts
+
+Hypothèse 2: Mappings de cellules incorrects
+---------------------------------------------
+Les mappings MAPPING_BILAN_ACTIF, MAPPING_BILAN_PASSIF, etc. ne correspondent
+pas aux cellules du nouveau template Liasse_officielle_revise.xlsx.
+
+Exemple:
+  MAPPING_BILAN_ACTIF = {
+      'AD': 'C10',  # ← Cette cellule est-elle correcte dans le nouveau template?
+      'AE': 'C11',
+      ...
+  }
+
+Hypothèse 3: Noms d'onglets différents
+---------------------------------------
+Le code cherche des onglets avec certains noms, mais le template utilise
+d'autres noms.
+
+Code actuel:
+```python
+if 'Bilan' in wb.sheetnames:
+    ws_bilan = wb['Bilan']
+```
+
+Noms possibles dans le template:
+  - 'BILAN' (majuscules)
+  - 'Bilan' (première lettre majuscule)
+  - 'bilan' (minuscules)
+
+Hypothèse 4: Données non transmises
+------------------------------------
+Les données results ne sont pas transmises correctement depuis le frontend
+ou l'API.
+
+================================================================================
+DÉPENDANCES VÉRIFIÉES
+================================================================================
+
+Bibliothèques Python installées:
+  ✅ openpyxl 3.1.5
+  ✅ pandas 3.0.2
+  ✅ xlrd 2.0.2
+
+Environnement:
+  ✅ conda claraverse_backend
+
+Fichiers:
+  ✅ py_backend/Liasse_officielle_revise.xlsx (template)
+  ✅ py_backend/export_liasse.py (code d'export)
+  ✅ py_backend/etats_financiers_v2.py (génération données)
+
+================================================================================
+OUTILS DE DIAGNOSTIC CRÉÉS
+================================================================================
+
+1. Script Python: py_backend/diagnostic_export_liasse.py
+   Fonctions:
+     - diagnostic_template(): Analyse le fichier template
+     - diagnostic_donnees_test(): Crée des données de test
+     - test_remplissage_simple(): Test de remplissage avec valeurs fictives
+
+2. Script PowerShell: test-diagnostic-export-liasse.ps1
+   Actions:
+     - Vérifie l'environnement conda
+     - Vérifie les dépendances Python
+     - Vérifie le fichier template
+     - Exécute le diagnostic complet
+
+3. Guide utilisateur: 00_COMMENCER_ICI_DIAGNOSTIC.txt
+   Contenu:
+     - Instructions pas à pas
+     - Analyse des résultats
+     - Solutions selon les cas
+     - Commandes rapides
+
+================================================================================
+PLAN D'ACTION
+================================================================================
+
+Étape 1: Exécuter le diagnostic
+--------------------------------
+Commande:
+  .\test-diagnostic-export-liasse.ps1
+
+Résultats attendus:
+  - Liste des onglets du template
+  - Structure des cellules
+  - Fichier test_liasse_remplie.xlsx avec valeurs de test
+
+Étape 2: Analyser les résultats
+--------------------------------
+Ouvrir test_liasse_remplie.xlsx et vérifier:
+  ✅ Les valeurs 123456.78 apparaissent dans les cellules
+  ❌ Les cellules sont vides
+
+Si les valeurs apparaissent:
+  → Problème = Format des données results
+  → Solution = Convertir le format LIST en DICT dans export_liasse.py
+
+Si les cellules sont vides:
+  → Problème = Noms d'onglets ou mappings de cellules
+  → Solution = Ajuster les noms d'onglets et/ou les mappings
+
+Étape 3: Corriger le problème identifié
+----------------------------------------
+
+CAS A: Format des données (LIST vs DICT)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Modifier export_liasse.py, fonction remplir_liasse_officielle():
+
+AVANT:
+```python
+for ref, cellule in MAPPING_BILAN_ACTIF.items():
+    if ref in results.get('bilan_actif', {}):
+        montant = results['bilan_actif'][ref]['montant']
+        ws_bilan[cellule] = montant
+```
+
+APRÈS:
+```python
+# Convertir LIST en DICT si nécessaire
+bilan_actif_dict = {}
+if isinstance(results.get('bilan_actif'), list):
+    for poste in results['bilan_actif']:
+        bilan_actif_dict[poste['ref']] = poste
+else:
+    bilan_actif_dict = results.get('bilan_actif', {})
+
+# Remplir les cellules
+for ref, cellule in MAPPING_BILAN_ACTIF.items():
+    if ref in bilan_actif_dict:
+        montant = bilan_actif_dict[ref].get('montant_n', 
+                                           bilan_actif_dict[ref].get('montant', 0))
+        ws_bilan[cellule] = montant
+```
+
+CAS B: Noms d'onglets
+~~~~~~~~~~~~~~~~~~~~~
+Modifier export_liasse.py:
+
+AVANT:
+```python
+if 'Bilan' in wb.sheetnames:
+    ws_bilan = wb['Bilan']
+```
+
+APRÈS:
+```python
+# Chercher l'onglet bilan (plusieurs variantes possibles)
+onglet_bilan = None
+for nom in ['BILAN', 'Bilan', 'bilan', 'ACTIF-PASSIF']:
+    if nom in wb.sheetnames:
+        onglet_bilan = nom
+        break
+
+if onglet_bilan:
+    ws_bilan = wb[onglet_bilan]
+```
+
+CAS C: Mappings de cellules
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. Ouvrir Liasse_officielle_revise.xlsx
+2. Identifier les cellules exactes pour chaque poste
+3. Mettre à jour les constantes MAPPING_BILAN_ACTIF, etc.
+
+Étape 4: Tester la correction
+------------------------------
+Commandes:
+  cd py_backend
+  python generer_etats_liasse.py
+
+Vérifications:
+  ✅ Fichier HTML généré avec données
+  ✅ Export Excel contient les données
+  ✅ Onglet "Contrôle de cohérence" présent et rempli
+
+================================================================================
+LOGS À AJOUTER POUR DEBUG
+================================================================================
+
+Dans export_liasse.py, fonction remplir_liasse_officielle():
+
+```python
+# Au début de la fonction
+logger.info(f"📊 Données reçues - Clés: {list(results.keys())}")
+logger.info(f"   Type bilan_actif: {type(results.get('bilan_actif'))}")
+
+if isinstance(results.get('bilan_actif'), list):
+    logger.info(f"   Bilan actif (LIST): {len(results['bilan_actif'])} postes")
+    if results['bilan_actif']:
+        logger.info(f"   Premier poste: {results['bilan_actif'][0]}")
+elif isinstance(results.get('bilan_actif'), dict):
+    logger.info(f"   Bilan actif (DICT): {len(results['bilan_actif'])} postes")
+    logger.info(f"   Clés: {list(results['bilan_actif'].keys())[:5]}")
+
+# Après chargement du workbook
+logger.info(f"📋 Onglets disponibles: {wb.sheetnames}")
+
+# Pendant le remplissage
+logger.info(f"📝 Remplissage Bilan Actif...")
+compteur = 0
+for ref, cellule in MAPPING_BILAN_ACTIF.items():
+    if ref in bilan_actif_dict:
+        montant = bilan_actif_dict[ref].get('montant_n', 0)
+        ws_bilan[cellule] = montant
+        compteur += 1
+        logger.debug(f"   {ref} -> {cellule}: {montant:,.2f}")
+
+logger.info(f"   ✅ {compteur} cellules remplies sur {len(MAPPING_BILAN_ACTIF)}")
+```
+
+================================================================================
+FICHIERS CRÉÉS POUR LE DIAGNOSTIC
+================================================================================
+
+Scripts:
+  📄 py_backend/diagnostic_export_liasse.py
+  📄 test-diagnostic-export-liasse.ps1
+
+Documentation:
+  📄 00_COMMENCER_ICI_DIAGNOSTIC.txt
+  📄 Doc_Etat_Fin/00_DIAGNOSTIC_LIASSE_VIDE_05_AVRIL_2026.txt (ce fichier)
+
+Fichiers générés par le diagnostic:
+  📄 py_backend/test_data_export_liasse.json (données de test)
+  📄 py_backend/test_liasse_remplie.xlsx (test de remplissage)
+
+================================================================================
+PROCHAINES ÉTAPES
+================================================================================
+
+1. ⏳ Exécuter le diagnostic: .\test-diagnostic-export-liasse.ps1
+2. ⏳ Analyser test_liasse_remplie.xlsx
+3. ⏳ Identifier le problème (format données / onglets / mappings)
+4. ⏳ Appliquer la correction appropriée
+5. ⏳ Tester avec python generer_etats_liasse.py
+6. ⏳ Valider l'export via le menu contextuel frontend
+
+================================================================================
+RÉFÉRENCES
+================================================================================
+
+Documentation précédente:
+  - Doc_Etat_Fin/00_CORRECTION_EXPORT_LIASSE_REVISE_05_AVRIL_2026.txt
+  - Doc_Etat_Fin/00_ONGLET_CONTROLE_COHERENCE_05_AVRIL_2026.txt
+  - Doc_Etat_Fin/00_INDEX_COMPLET_V2.md
+
+Code source:
+  - py_backend/export_liasse.py (fonction remplir_liasse_officielle)
+  - py_backend/etats_financiers_v2.py (fonction process_balance_to_liasse_format)
+  - py_backend/generer_etats_liasse.py (script de test)
+
+Template:
+  - py_backend/Liasse_officielle_revise.xlsx (84 onglets)
+
+================================================================================
+RÉSUMÉ
+================================================================================
+
+Problème: Liasse exportée vide (aucune donnée dans les cellules)
+
+Cause probable: Incompatibilité de format entre:
+  - etats_financiers_v2.py qui retourne des LIST
+  - export_liasse.py qui attend des DICT
+
+Solution: Convertir le format LIST en DICT dans export_liasse.py
+
+Outils créés:
+  ✅ Script de diagnostic Python
+  ✅ Script PowerShell automatisé
+  ✅ Guide utilisateur complet
+
+Prochaine action: Exécuter .\test-diagnostic-export-liasse.ps1
+
+================================================================================

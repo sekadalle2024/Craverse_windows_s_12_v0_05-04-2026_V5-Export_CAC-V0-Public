@@ -1,0 +1,95 @@
+{
+  "bilan_actif": {
+    "AD": {
+      "ref": "AD",
+      "libelle": "Charges immobilisées",
+      "montant": 1000000
+    },
+    "AE": {
+      "ref": "AE",
+      "libelle": "Frais de recherche",
+      "montant": 500000
+    },
+    "AI": {
+      "ref": "AI",
+      "libelle": "Terrains",
+      "montant": 5000000
+    },
+    "AJ": {
+      "ref": "AJ",
+      "libelle": "Bâtiments",
+      "montant": 10000000
+    },
+    "BB": {
+      "ref": "BB",
+      "libelle": "Stocks",
+      "montant": 2000000
+    },
+    "BI": {
+      "ref": "BI",
+      "libelle": "Clients",
+      "montant": 3000000
+    },
+    "BV": {
+      "ref": "BV",
+      "libelle": "Banques",
+      "montant": 1500000
+    }
+  },
+  "bilan_passif": {
+    "DA": {
+      "ref": "DA",
+      "libelle": "Capital",
+      "montant": 10000000
+    },
+    "DH": {
+      "ref": "DH",
+      "libelle": "Résultat net",
+      "montant": 2000000
+    },
+    "RA": {
+      "ref": "RA",
+      "libelle": "Emprunts",
+      "montant": 5000000
+    },
+    "TC": {
+      "ref": "TC",
+      "libelle": "Fournisseurs",
+      "montant": 3000000
+    },
+    "TD": {
+      "ref": "TD",
+      "libelle": "Dettes fiscales",
+      "montant": 1000000
+    }
+  },
+  "charges": {
+    "TA": {
+      "ref": "TA",
+      "libelle": "Achats marchandises",
+      "montant": 5000000
+    },
+    "TK": {
+      "ref": "TK",
+      "libelle": "Charges personnel",
+      "montant": 3000000
+    },
+    "TL": {
+      "ref": "TL",
+      "libelle": "Dotations amortissements",
+      "montant": 1000000
+    }
+  },
+  "produits": {
+    "RA": {
+      "ref": "RA",
+      "libelle": "Ventes marchandises",
+      "montant": 15000000
+    },
+    "RB": {
+      "ref": "RB",
+      "libelle": "Ventes produits",
+      "montant": 5000000
+    }
+  }
+}
