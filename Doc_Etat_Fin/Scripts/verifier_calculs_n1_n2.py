@@ -33,9 +33,16 @@ def verifier_chargement_n2():
     
     # Charger les 3 onglets
     try:
-        balance_n = pd.read_excel(fichier, sheet_name="BALANCE N")
-        balance_n1 = pd.read_excel(fichier, sheet_name="BALANCE N-1")
-        balance_n2 = pd.read_excel(fichier, sheet_name="BALANCE N-2")
+        # Détecter les noms d'onglets
+        excel_file = pd.ExcelFile(fichier)
+        sheet_names = excel_file.sheet_names
+        print(f"📋 Onglets détectés: {sheet_names}")
+        print()
+        
+        # Utiliser les 3 premiers onglets (N, N-1, N-2)
+        balance_n = pd.read_excel(fichier, sheet_name=sheet_names[0])
+        balance_n1 = pd.read_excel(fichier, sheet_name=sheet_names[1])
+        balance_n2 = pd.read_excel(fichier, sheet_name=sheet_names[2])
         
         print(f"✅ Balance N chargée: {len(balance_n)} comptes")
         print(f"✅ Balance N-1 chargée: {len(balance_n1)} comptes")

@@ -1473,10 +1473,15 @@ async def process_excel(request: ExcelUploadRequest):
                 logger.info(f"✅ Balance N-1 trouvée dans l'onglet '{sheet}': {len(balance_n1_df)} lignes")
                 break
         
-        # Si pas d'onglets spécifiques trouvés, utiliser le premier onglet comme Balance N
+        # Si pas d'onglets spécifiques trouvés, utiliser l'ordre des onglets
+        # (1er = N, 2ème = N-1, 3ème = N-2)
         if balance_df is None:
             balance_df = pd.read_excel(excel_data, sheet_name=0)
-            logger.info(f"📊 Balance N chargée depuis le premier onglet: {len(balance_df)} lignes")
+            logger.info(f"📊 Balance N chargée depuis le premier onglet '{sheet_names[0]}': {len(balance_df)} lignes")
+        
+        if balance_n1_df is None and len(sheet_names) >= 2:
+            balance_n1_df = pd.read_excel(excel_data, sheet_name=1)
+            logger.info(f"📊 Balance N-1 chargée depuis le deuxième onglet '{sheet_names[1]}': {len(balance_n1_df)} lignes")
         
         # Si balance N-1 fournie en tant que fichier séparé (ancien comportement)
         if request.file_n1_base64 and balance_n1_df is None:
@@ -1523,6 +1528,11 @@ async def process_excel(request: ExcelUploadRequest):
                 logger.info(f"✅ Balance N-2 trouvée dans l'onglet '{sheet}': {len(balance_n2_df)} lignes")
                 break
         
+        # Si pas trouvé par pattern et qu'il y a au moins 3 onglets, utiliser le 3ème
+        if balance_n2_df is None and len(sheet_names) >= 3:
+            balance_n2_df = pd.read_excel(excel_data, sheet_name=2)
+            logger.info(f"📊 Balance N-2 chargée depuis le troisième onglet '{sheet_names[2]}': {len(balance_n2_df)} lignes")
+        
         if balance_n2_df is None:
             logger.info("📋 Balance N-2 non trouvée, colonne N-2 sera vide")
         
@@ -1531,19 +1541,30 @@ async def process_excel(request: ExcelUploadRequest):
         
         # Calculer le TFT au format liasse (N et N-1)
         try:
+            logger.info("🔄 Calcul du TFT...")
+            logger.info(f"  balance_df: {len(balance_df) if balance_df is not None else 'None'} lignes")
+            logger.info(f"  balance_n1_df: {len(balance_n1_df) if balance_n1_df is not None else 'None'} lignes")
+            logger.info(f"  balance_n2_df: {len(balance_n2_df) if balance_n2_df is not None else 'None'} lignes")
+            
             resultat_net_n = next((p['montant_n'] for p in results_liasse['compte_resultat'] if p['ref'] == 'XI'), 0)
             resultat_net_n1 = next((p['montant_n1'] for p in results_liasse['compte_resultat'] if p['ref'] == 'XI'), 0)
             
+            logger.info(f"  resultat_net_n: {resultat_net_n:,.0f}")
+            logger.info(f"  resultat_net_n1: {resultat_net_n1:,.0f}")
+            
             tft_data = calculer_tft_liasse(balance_df, balance_n1_df, balance_n2_df, resultat_net_n, resultat_net_n1)
             results_liasse['tft'] = tft_data
-            logger.info("✅ TFT calculé avec succès (format liasse N, N-1 et N-2)")
+            logger.info(f"✅ TFT calculé avec succès: {len(tft_data.get('tft', []))} lignes")
+            logger.info(f"  TFT ajouté à results_liasse: {'tft' in results_liasse}")
         except Exception as e:
-            logger.warning(f"⚠️ Erreur calcul TFT: {e}")
+            logger.error(f"❌ Erreur calcul TFT: {e}")
             import traceback
-            traceback.print_exc()
+            logger.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
         
         # Calculer les annexes complètes au format liasse
         try:
+            logger.info("🔄 Calcul des annexes...")
             annexes_data = calculer_annexes_completes(
                 results_liasse['bilan_actif'],
                 results_liasse['bilan_actif'],
@@ -1553,11 +1574,11 @@ async def process_excel(request: ExcelUploadRequest):
                 results_liasse['compte_resultat']
             )
             results_liasse['annexes'] = annexes_data
-            logger.info("✅ Annexes complètes calculées avec succès")
+            logger.info(f"✅ Annexes calculées avec succès: {len(annexes_data)} notes")
         except Exception as e:
-            logger.warning(f"⚠️ Erreur calcul annexes: {e}")
+            logger.error(f"❌ Erreur calcul annexes: {e}")
             import traceback
-            traceback.print_exc()
+            logger.error(traceback.format_exc())
         
         # Générer le HTML au format liasse
         # CSS complet avec accordéons (inline pour éviter problèmes de cache)
@@ -1717,8 +1738,17 @@ async def process_excel(request: ExcelUploadRequest):
         html += generate_section_html_liasse("compte_resultat", "📊 COMPTE DE RÉSULTAT", results_liasse['compte_resultat'])
         
         # TFT au format liasse (si disponible)
-        if 'tft' in results_liasse and results_liasse['tft']:
-            html += generate_tft_html_liasse(results_liasse['tft'])
+        logger.info(f"🔍 Vérification TFT dans results_liasse: {'tft' in results_liasse}")
+        if 'tft' in results_liasse:
+            logger.info(f"  TFT présent: {results_liasse['tft'] is not None}")
+            if results_liasse['tft']:
+                logger.info(f"  Nombre de lignes TFT: {len(results_liasse['tft'].get('tft', []))}")
+                html += generate_tft_html_liasse(results_liasse['tft'])
+                logger.info("✅ HTML TFT ajouté")
+            else:
+                logger.warning("⚠️ TFT est vide")
+        else:
+            logger.warning("⚠️ TFT non trouvé dans results_liasse")
         
         # Annexes au format liasse (si disponibles)
         if 'annexes' in results_liasse and results_liasse['annexes']:
@@ -1728,13 +1758,14 @@ async def process_excel(request: ExcelUploadRequest):
         try:
             etats_controle = {}
             
-            # Séparer les données N et N-1 pour les états de contrôle
-            bilan_actif_n = [p for p in results_liasse['bilan_actif']]
-            bilan_actif_n1 = [p for p in results_liasse['bilan_actif']]
-            bilan_passif_n = [p for p in results_liasse['bilan_passif']]
-            bilan_passif_n1 = [p for p in results_liasse['bilan_passif']]
-            compte_resultat_n = [p for p in results_liasse['compte_resultat']]
-            compte_resultat_n1 = [p for p in results_liasse['compte_resultat']]
+            # Les données sont déjà au format liasse avec montant_n et montant_n1 dans chaque poste
+            # Pas besoin de séparer, on passe directement les listes complètes
+            bilan_actif_n = results_liasse['bilan_actif']
+            bilan_actif_n1 = results_liasse['bilan_actif']  # Même liste car contient déjà N et N-1
+            bilan_passif_n = results_liasse['bilan_passif']
+            bilan_passif_n1 = results_liasse['bilan_passif']
+            compte_resultat_n = results_liasse['compte_resultat']
+            compte_resultat_n1 = results_liasse['compte_resultat']
             
             # États de contrôle pour chaque document (N et N-1)
             etats_controle['etat_controle_bilan_actif'] = calculer_etat_controle_bilan_actif(
@@ -1755,8 +1786,10 @@ async def process_excel(request: ExcelUploadRequest):
                 )
             
             # État de contrôle du sens des comptes
+            balance_n_records = balance_df.to_dict('records') if balance_df is not None else []
+            balance_n1_records = balance_n1_df.to_dict('records') if balance_n1_df is not None else []
             etats_controle['etat_controle_sens_comptes'] = calculer_etat_controle_sens_comptes(
-                balance_df.to_dict('records'), balance_n1_df.to_dict('records')
+                balance_n_records, balance_n1_records
             )
             
             # État d'équilibre du bilan
@@ -1769,7 +1802,15 @@ async def process_excel(request: ExcelUploadRequest):
             )
             
             # Générer le HTML des états de contrôle
-            html += generate_all_etats_controle_html(etats_controle)
+            logger.info("🔄 Génération HTML états de contrôle...")
+            logger.info(f"  Nombre d'états: {len(etats_controle)}")
+            for key in etats_controle.keys():
+                nb_postes = len(etats_controle[key].get('postes', []))
+                logger.info(f"    - {key}: {nb_postes} postes")
+            
+            html_etats = generate_all_etats_controle_html(etats_controle)
+            logger.info(f"  HTML généré: {len(html_etats)} caractères")
+            html += html_etats
             logger.info("✅ États de contrôle exhaustifs générés avec succès")
             
         except Exception as e:

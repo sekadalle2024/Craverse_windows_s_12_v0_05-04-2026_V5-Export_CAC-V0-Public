@@ -26,12 +26,12 @@ def charger_balance_demo():
         print(f"❌ Fichier non trouvé: {fichier}")
         return None, None
     
-    # Charger les onglets N et N-1
-    balance_n = pd.read_excel(fichier, sheet_name="BALANCE N")
-    balance_n1 = pd.read_excel(fichier, sheet_name="BALANCE N-1")
+    # Charger les onglets avec les années réelles
+    balance_n = pd.read_excel(fichier, sheet_name="BALANCE 2018")
+    balance_n1 = pd.read_excel(fichier, sheet_name="BALANCE 2017")
     
-    print(f"✅ Balance N chargée: {len(balance_n)} comptes")
-    print(f"✅ Balance N-1 chargée: {len(balance_n1)} comptes")
+    print(f"✅ Balance N (2018) chargée: {len(balance_n)} comptes")
+    print(f"✅ Balance N-1 (2017) chargée: {len(balance_n1)} comptes")
     
     return balance_n, balance_n1
 
@@ -402,7 +402,7 @@ def main():
         'etat_controle_compte_resultat': calculer_etat_controle_compte_resultat([], []),
         'etat_controle_tft': calculer_etat_controle_tft([], []),
         'etat_controle_sens_comptes': calculer_etat_controle_sens_comptes(donnees_n, donnees_n1),
-        'etat_equilibre_bilan': calculer_etat_equilibre_bilan([], 0, [], 0)
+        'etat_equilibre_bilan': calculer_etat_equilibre_bilan([], [], 0, [], [], 0)
     }
     
     # Générer le HTML

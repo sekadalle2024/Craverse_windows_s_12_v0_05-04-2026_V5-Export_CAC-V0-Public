@@ -196,53 +196,120 @@
   function replaceTableWithResults(table, html) {
     console.group("🔄 REMPLACEMENT DE LA TABLE");
 
-    const parentDiv = table.closest(CONFIG.SELECTORS.PARENT_DIV);
-
+    // Essayer plusieurs sélecteurs pour trouver le div parent
+    let parentDiv = table.closest(CONFIG.SELECTORS.PARENT_DIV);
+    
     if (!parentDiv) {
-      console.error("❌ Div parent non trouvée!");
+      console.warn("⚠️ Sélecteur principal non trouvé, essai avec sélecteurs alternatifs");
+      
+      // Essayer des sélecteurs alternatifs plus génériques
+      parentDiv = table.closest('div.prose') || 
+                  table.closest('div[class*="prose"]') ||
+                  table.closest('div[class*="message"]') ||
+                  table.closest('div') ||
+                  table.parentElement;
+    }
+    
+    if (!parentDiv) {
+      console.error("❌ Aucun div parent trouvé!");
       console.groupEnd();
       return false;
     }
 
-    console.log("📍 Div parent trouvée");
+    console.log("📍 Div parent trouvé:", parentDiv.className || 'sans classe');
+    console.log("📍 Div parent tag:", parentDiv.tagName);
+    console.log("📊 HTML à insérer - Longueur:", html.length, "caractères");
 
     // Créer un conteneur pour les résultats
     const container = document.createElement('div');
     container.className = 'etat-fin-results';
-    container.style.cssText = 'margin-top: 20px;';
+    container.style.cssText = `
+      margin-top: 20px; 
+      display: block !important; 
+      visibility: visible !important; 
+      opacity: 1 !important;
+      width: 100%;
+      min-height: 100px;
+    `;
 
     // Ajouter un titre
     const title = document.createElement('h3');
     title.textContent = '📊 États Financiers SYSCOHADA';
-    title.style.cssText = 'margin: 0 0 16px 0; color: #333; font-size: 18px; font-weight: 600;';
+    title.style.cssText = `
+      margin: 0 0 16px 0; 
+      color: #333; 
+      font-size: 18px; 
+      font-weight: 600;
+      display: block !important;
+    `;
     container.appendChild(title);
 
     // Ajouter le HTML des résultats
     const resultsContainer = document.createElement('div');
     resultsContainer.innerHTML = html;
+    resultsContainer.style.cssText = 'display: block !important; width: 100%;';
     container.appendChild(resultsContainer);
 
     // Remplacer le contenu de la div parent
     parentDiv.innerHTML = '';
     parentDiv.appendChild(container);
+    
+    // Forcer l'affichage du parent
+    parentDiv.style.display = 'block';
+    parentDiv.style.visibility = 'visible';
+    parentDiv.style.opacity = '1';
+
+    // Logs de débogage détaillés
+    console.log("📊 Vérification après insertion:");
+    console.log("  - Container inséré:", container.isConnected);
+    console.log("  - Container visible:", window.getComputedStyle(container).display);
+    console.log("  - Accordéons trouvés:", parentDiv.querySelectorAll('.section-header-ef').length);
+    console.log("  - Contenus trouvés:", parentDiv.querySelectorAll('.section-content-ef').length);
+    console.log("  - Tables trouvées:", parentDiv.querySelectorAll('.liasse-table').length);
 
     // Attacher les événements des accordéons APRÈS l'insertion dans le DOM
     setTimeout(() => {
       const headers = parentDiv.querySelectorAll('.section-header-ef');
       console.log(`📋 États Financiers: ${headers.length} accordéons trouvés`);
       
-      headers.forEach((header) => {
+      if (headers.length === 0) {
+        console.warn("⚠️ Aucun accordéon trouvé! Vérifier le HTML généré par le backend");
+        console.log("📄 HTML inséré (premiers 500 caractères):", html.substring(0, 500));
+      }
+      
+      headers.forEach((header, index) => {
+        // Ajouter un style pour rendre l'accordéon visible
+        header.style.display = 'flex';
+        header.style.cursor = 'pointer';
+        
         header.addEventListener('click', function() {
           console.log('🖱️ Clic sur accordéon:', this.textContent.trim());
           this.classList.toggle('active');
           const content = this.nextElementSibling;
           if (content) {
             content.classList.toggle('active');
+            console.log('  - Accordéon ouvert:', content.classList.contains('active'));
           }
         });
+        
+        // Ouvrir le premier accordéon par défaut (BILAN ACTIF)
+        if (index === 0) {
+          console.log('🔓 Ouverture automatique du premier accordéon');
+          header.classList.add('active');
+          const content = header.nextElementSibling;
+          if (content) {
+            content.classList.add('active');
+            content.style.maxHeight = content.scrollHeight + 'px';
+            console.log('  - Max-height défini:', content.style.maxHeight);
+          }
+        }
       });
       
       console.log('✅ Événements des accordéons attachés');
+      console.log('✅ Premier accordéon ouvert par défaut');
+      
+      // Scroll vers les résultats
+      container.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
 
     console.log("✅ Table remplacée avec les résultats");
