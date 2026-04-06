@@ -1,8 +1,8 @@
-# Script PowerShell pour exécuter le diagnostic complet de l'export liasse
+# Script PowerShell simplifié pour tester l'export de la liasse
 # Date: 06 Avril 2026
 
 Write-Host "=" -ForegroundColor Cyan
-Write-Host "DIAGNOSTIC COMPLET - EXPORT LIASSE OFFICIELLE" -ForegroundColor Cyan
+Write-Host "TEST DIAGNOSTIC SIMPLE - EXPORT LIASSE" -ForegroundColor Cyan
 Write-Host "=" -ForegroundColor Cyan
 Write-Host ""
 
@@ -13,17 +13,13 @@ if (-not (Test-Path "py_backend")) {
     exit 1
 }
 
-Write-Host "Activation de l'environnement conda..." -ForegroundColor Yellow
-conda activate claraverse_env
-
-Write-Host ""
 Write-Host "Exécution du diagnostic..." -ForegroundColor Yellow
 Write-Host ""
 
 # Aller dans le dossier py_backend
 cd py_backend
 
-# Exécuter le script de diagnostic
+# Exécuter le script de diagnostic avec Python (sans conda)
 python diagnostic_export_liasse_complet.py
 
 # Retourner à la racine

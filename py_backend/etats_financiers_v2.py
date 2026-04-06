@@ -271,7 +271,9 @@ def process_balance_to_liasse_format(
     return {
         'compte_resultat': resultat_complet,
         'bilan_actif': bilan_actif_complet,
-        'bilan_passif': bilan_passif_complet
+        'bilan_passif': bilan_passif_complet,
+        'balance_n_df': balance_n_df,
+        'balance_n1_df': balance_n1_df
     }
 
 

@@ -313,6 +313,17 @@ def remplir_liasse_officielle(results: Dict[str, Any], nom_entreprise: str, exer
     logger.info(f"   - Charges: {len(charges_dict)} postes")
     logger.info(f"   - Produits: {len(produits_dict)} postes")
     
+    # ==================== ENRICHISSEMENT AVEC BRUT ET AMORTISSEMENT ====================
+    # Récupérer les balances depuis results si disponibles
+    balance_n_df = results.get('balance_n_df')
+    balance_n1_df = results.get('balance_n1_df')
+    
+    if balance_n_df is not None:
+        logger.info("📊 Enrichissement du Bilan ACTIF avec BRUT et AMORTISSEMENT...")
+        enrichir_actif_avec_brut_amortissement(bilan_actif_dict, balance_n_df, balance_n1_df)
+    else:
+        logger.warning("⚠️ Balances non disponibles - BRUT et AMORTISSEMENT non calculés")
+    
     # ==================== FONCTION POUR ÉCRIRE DANS CELLULE ====================
     
     def write_to_cell(ws, cell_addr, value):
@@ -411,6 +422,249 @@ def remplir_liasse_officielle(results: Dict[str, Any], nom_entreprise: str, exer
         """Extrait le montant N-1 d'un poste"""
         v = poste.get('montant_n1', 0)
         return 0 if v is None else float(v)
+    
+    def calculer_totalisations_actif(bilan_actif_dict):
+        """Calcule les totalisations du bilan actif"""
+        totalisations = {}
+        
+        # AZ: TOTAL ACTIF IMMOBILISÉ (AD à AQ)
+        refs_immobilise = ['AD', 'AE', 'AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL', 'AM', 'AN', 'AP', 'AQ']
+        total_n = sum(extraire_montant(bilan_actif_dict.get(r, {})) for r in refs_immobilise)
+        total_n1 = sum(extraire_montant_n1(bilan_actif_dict.get(r, {})) for r in refs_immobilise)
+        totalisations['AZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # BQ: TOTAL ACTIF CIRCULANT (BA à BK)
+        refs_circulant = ['BA', 'BB', 'BC', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BK']
+        total_n = sum(extraire_montant(bilan_actif_dict.get(r, {})) for r in refs_circulant)
+        total_n1 = sum(extraire_montant_n1(bilan_actif_dict.get(r, {})) for r in refs_circulant)
+        totalisations['BQ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # BZ: TOTAL TRÉSORERIE-ACTIF (BT, BU, BV)
+        refs_tresorerie = ['BT', 'BU', 'BV']
+        total_n = sum(extraire_montant(bilan_actif_dict.get(r, {})) for r in refs_tresorerie)
+        total_n1 = sum(extraire_montant_n1(bilan_actif_dict.get(r, {})) for r in refs_tresorerie)
+        totalisations['BZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # CZ: TOTAL ÉCARTS DE CONVERSION-ACTIF (CA, CB)
+        refs_ecarts = ['CA', 'CB']
+        total_n = sum(extraire_montant(bilan_actif_dict.get(r, {})) for r in refs_ecarts)
+        total_n1 = sum(extraire_montant_n1(bilan_actif_dict.get(r, {})) for r in refs_ecarts)
+        totalisations['CZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # DZ: TOTAL GÉNÉRAL ACTIF (AZ + BQ + BZ + CZ)
+        total_n = (totalisations['AZ']['montant_n'] + totalisations['BQ']['montant_n'] + 
+                   totalisations['BZ']['montant_n'] + totalisations['CZ']['montant_n'])
+        total_n1 = (totalisations['AZ']['montant_n1'] + totalisations['BQ']['montant_n1'] + 
+                    totalisations['BZ']['montant_n1'] + totalisations['CZ']['montant_n1'])
+        totalisations['DZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        logger.info(f"   ✅ Totalisations ACTIF calculées: AZ={totalisations['AZ']['montant_n']:,.0f}, DZ={totalisations['DZ']['montant_n']:,.0f}")
+        return totalisations
+    
+    def extraire_brut_et_amortissement_depuis_balance(balance_df, compte_principal):
+        """
+        Extrait les valeurs brutes et amortissements pour un compte depuis la balance
+        
+        Args:
+            balance_df: DataFrame de la balance
+            compte_principal: Numéro de compte (ex: '21' pour immobilisations corporelles)
+        
+        Returns:
+            tuple: (brut, amortissement, net)
+        """
+        if balance_df is None or balance_df.empty:
+            return 0, 0, 0
+        
+        try:
+            # Détecter les colonnes de la balance
+            from etats_financiers import detect_balance_columns, clean_number
+            col_map = detect_balance_columns(balance_df)
+            
+            # Valeur brute: solde débit des comptes 2xxx
+            brut = 0
+            for idx, row in balance_df.iterrows():
+                numero = str(row.get(col_map['numero'], '')).strip()
+                if numero.startswith(compte_principal):
+                    solde_debit = clean_number(row.get(col_map['solde_debit'], 0)) if col_map['solde_debit'] else 0
+                    brut += solde_debit
+            
+            # Amortissement: solde crédit des comptes 28xx correspondants
+            compte_amort = '28' + compte_principal[1:] if len(compte_principal) >= 2 else '28'
+            amortissement = 0
+            for idx, row in balance_df.iterrows():
+                numero = str(row.get(col_map['numero'], '')).strip()
+                if numero.startswith(compte_amort):
+                    solde_credit = clean_number(row.get(col_map['solde_credit'], 0)) if col_map['solde_credit'] else 0
+                    amortissement += solde_credit
+            
+            # Net = Brut - Amortissement
+            net = brut - amortissement
+            
+            return brut, amortissement, net
+            
+        except Exception as e:
+            logger.warning(f"   Erreur extraction brut/amort pour {compte_principal}: {e}")
+            return 0, 0, 0
+    
+    def enrichir_actif_avec_brut_amortissement(bilan_actif_dict, balance_n_df, balance_n1_df):
+        """
+        Enrichit le dictionnaire bilan_actif avec les colonnes brut et amortissement
+        
+        Cette fonction ajoute les clés 'brut_n', 'amort_n', 'brut_n1', 'amort_n1' 
+        aux postes d'immobilisations (AD à AQ)
+        """
+        # Mapping des REF vers les comptes principaux
+        MAPPING_REF_COMPTES = {
+            'AD': '20',  # Charges immobilisées
+            'AE': '201', # Frais de recherche et développement
+            'AF': '21',  # Brevets, licences, logiciels (immobilisations incorporelles)
+            'AG': '207', # Fonds commercial
+            'AH': '20',  # Autres immobilisations incorporelles
+            'AI': '22',  # Terrains
+            'AJ': '23',  # Bâtiments
+            'AK': '24',  # Installations et agencements
+            'AL': '24',  # Matériel
+            'AM': '245', # Matériel de transport
+            'AN': '25',  # Avances et acomptes versés sur immobilisations
+            'AP': '26',  # Titres de participation
+            'AQ': '27',  # Autres immobilisations financières
+        }
+        
+        logger.info("   📊 Enrichissement ACTIF avec BRUT et AMORTISSEMENT...")
+        
+        for ref, compte in MAPPING_REF_COMPTES.items():
+            if ref in bilan_actif_dict:
+                # Extraire pour N
+                brut_n, amort_n, net_n = extraire_brut_et_amortissement_depuis_balance(balance_n_df, compte)
+                
+                # Extraire pour N-1
+                brut_n1, amort_n1, net_n1 = extraire_brut_et_amortissement_depuis_balance(balance_n1_df, compte)
+                
+                # Ajouter au dictionnaire
+                bilan_actif_dict[ref]['brut_n'] = brut_n
+                bilan_actif_dict[ref]['amort_n'] = amort_n
+                bilan_actif_dict[ref]['brut_n1'] = brut_n1
+                bilan_actif_dict[ref]['amort_n1'] = amort_n1
+                
+                # Vérifier la cohérence: net devrait être proche de brut - amort
+                net_calcule = brut_n - amort_n
+                net_existant = extraire_montant(bilan_actif_dict[ref])
+                
+                if abs(net_calcule - net_existant) > 1:  # Tolérance de 1 pour les arrondis
+                    logger.debug(f"      {ref}: Net calculé={net_calcule:,.0f} vs Net existant={net_existant:,.0f}")
+        
+        logger.info(f"   ✅ ACTIF enrichi avec BRUT et AMORTISSEMENT")
+    
+    def calculer_totalisations_actif(bilan_actif_dict):
+        """Calcule les totalisations du bilan actif (avec brut et amortissement si disponibles)"""
+        totalisations = {}
+        
+        # AZ: TOTAL ACTIF IMMOBILISÉ (AD à AQ)
+        refs_immobilise = ['AD', 'AE', 'AF', 'AG', 'AH', 'AI', 'AJ', 'AK', 'AL', 'AM', 'AN', 'AP', 'AQ']
+        total_n = sum(extraire_montant(bilan_actif_dict.get(r, {})) for r in refs_immobilise)
+        total_n1 = sum(extraire_montant_n1(bilan_actif_dict.get(r, {})) for r in refs_immobilise)
+        
+        # Calculer aussi les totaux brut et amortissement si disponibles
+        total_brut_n = sum(bilan_actif_dict.get(r, {}).get('brut_n', 0) for r in refs_immobilise)
+        total_amort_n = sum(bilan_actif_dict.get(r, {}).get('amort_n', 0) for r in refs_immobilise)
+        total_brut_n1 = sum(bilan_actif_dict.get(r, {}).get('brut_n1', 0) for r in refs_immobilise)
+        total_amort_n1 = sum(bilan_actif_dict.get(r, {}).get('amort_n1', 0) for r in refs_immobilise)
+        
+        totalisations['AZ'] = {
+            'montant_n': total_n, 
+            'montant_n1': total_n1,
+            'brut_n': total_brut_n,
+            'amort_n': total_amort_n,
+            'brut_n1': total_brut_n1,
+            'amort_n1': total_amort_n1
+        }
+        
+        # BQ: TOTAL ACTIF CIRCULANT (BA à BK)
+        refs_circulant = ['BA', 'BB', 'BC', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BK']
+        total_n = sum(extraire_montant(bilan_actif_dict.get(r, {})) for r in refs_circulant)
+        total_n1 = sum(extraire_montant_n1(bilan_actif_dict.get(r, {})) for r in refs_circulant)
+        totalisations['BQ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # BZ: TOTAL TRÉSORERIE-ACTIF (BT, BU, BV)
+        refs_tresorerie = ['BT', 'BU', 'BV']
+        total_n = sum(extraire_montant(bilan_actif_dict.get(r, {})) for r in refs_tresorerie)
+        total_n1 = sum(extraire_montant_n1(bilan_actif_dict.get(r, {})) for r in refs_tresorerie)
+        totalisations['BZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # CZ: TOTAL ÉCARTS DE CONVERSION-ACTIF (CA, CB)
+        refs_ecarts = ['CA', 'CB']
+        total_n = sum(extraire_montant(bilan_actif_dict.get(r, {})) for r in refs_ecarts)
+        total_n1 = sum(extraire_montant_n1(bilan_actif_dict.get(r, {})) for r in refs_ecarts)
+        totalisations['CZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # DZ: TOTAL GÉNÉRAL ACTIF (AZ + BQ + BZ + CZ)
+        total_n = (totalisations['AZ']['montant_n'] + totalisations['BQ']['montant_n'] + 
+                   totalisations['BZ']['montant_n'] + totalisations['CZ']['montant_n'])
+        total_n1 = (totalisations['AZ']['montant_n1'] + totalisations['BQ']['montant_n1'] + 
+                    totalisations['BZ']['montant_n1'] + totalisations['CZ']['montant_n1'])
+        
+        # Totaux brut et amortissement pour DZ
+        total_brut_n = totalisations['AZ'].get('brut_n', 0)
+        total_amort_n = totalisations['AZ'].get('amort_n', 0)
+        total_brut_n1 = totalisations['AZ'].get('brut_n1', 0)
+        total_amort_n1 = totalisations['AZ'].get('amort_n1', 0)
+        
+        totalisations['DZ'] = {
+            'montant_n': total_n, 
+            'montant_n1': total_n1,
+            'brut_n': total_brut_n,
+            'amort_n': total_amort_n,
+            'brut_n1': total_brut_n1,
+            'amort_n1': total_amort_n1
+        }
+        
+        logger.info(f"   ✅ Totalisations ACTIF calculées: AZ={totalisations['AZ']['montant_n']:,.0f}, DZ={totalisations['DZ']['montant_n']:,.0f}")
+        return totalisations
+    
+    def calculer_totalisations_passif(bilan_passif_dict):
+        """Calcule les totalisations du bilan passif"""
+        totalisations = {}
+        
+        # DZ: TOTAL CAPITAUX PROPRES (DA à DJ)
+        refs_capitaux = ['DA', 'DB', 'DC', 'DD', 'DE', 'DF', 'DG', 'DH', 'DI', 'DJ']
+        total_n = sum(extraire_montant(bilan_passif_dict.get(r, {})) for r in refs_capitaux)
+        total_n1 = sum(extraire_montant_n1(bilan_passif_dict.get(r, {})) for r in refs_capitaux)
+        totalisations['DZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # RZ: TOTAL DETTES FINANCIÈRES (RA à RD)
+        refs_dettes_fin = ['RA', 'RB', 'RC', 'RD']
+        total_n = sum(extraire_montant(bilan_passif_dict.get(r, {})) for r in refs_dettes_fin)
+        total_n1 = sum(extraire_montant_n1(bilan_passif_dict.get(r, {})) for r in refs_dettes_fin)
+        totalisations['RZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # TZ: TOTAL PASSIF CIRCULANT (TA à TG)
+        refs_passif_circ = ['TA', 'TB', 'TC', 'TD', 'TE', 'TF', 'TG']
+        total_n = sum(extraire_montant(bilan_passif_dict.get(r, {})) for r in refs_passif_circ)
+        total_n1 = sum(extraire_montant_n1(bilan_passif_dict.get(r, {})) for r in refs_passif_circ)
+        totalisations['TZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # UZ: TOTAL TRÉSORERIE-PASSIF (UA, UB, UC)
+        refs_tresorerie = ['UA', 'UB', 'UC']
+        total_n = sum(extraire_montant(bilan_passif_dict.get(r, {})) for r in refs_tresorerie)
+        total_n1 = sum(extraire_montant_n1(bilan_passif_dict.get(r, {})) for r in refs_tresorerie)
+        totalisations['UZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        # VZ: TOTAL ÉCARTS DE CONVERSION-PASSIF (VA, VB)
+        refs_ecarts = ['VA', 'VB']
+        total_n = sum(extraire_montant(bilan_passif_dict.get(r, {})) for r in refs_ecarts)
+        total_n1 = sum(extraire_montant_n1(bilan_passif_dict.get(r, {})) for r in refs_ecarts)
+        totalisations['VZ'] = {'montant_n': total_n, 'montant_n1': total_n1}
+        
+        logger.info(f"   ✅ Totalisations PASSIF calculées: DZ={totalisations['DZ']['montant_n']:,.0f}")
+        return totalisations
+    
+    # Calculer et ajouter les totalisations
+    logger.info("📊 Calcul des totalisations...")
+    totalisations_actif = calculer_totalisations_actif(bilan_actif_dict)
+    bilan_actif_dict.update(totalisations_actif)
+    
+    totalisations_passif = calculer_totalisations_passif(bilan_passif_dict)
+    bilan_passif_dict.update(totalisations_passif)
         
     def remplir_onglet_par_scan(onglet_name, dict_donnees, col_n, col_n1, ref_col_idx=1):
         """Scanne la colonne (par defaut A=1) pour les REF et remplit directement col_n et col_n1."""
@@ -446,6 +700,73 @@ def remplir_liasse_officielle(results: Dict[str, Any], nom_entreprise: str, exer
                         erreurs += 1
         
         return compteur, erreurs
+    
+    def remplir_onglet_actif_avec_brut_amort(onglet_name, dict_donnees, col_brut_n='F', col_amort_n='G', col_net_n='H', col_net_n1='I', ref_col_idx=1):
+        """
+        Remplit l'onglet ACTIF avec les 4 colonnes: BRUT N, AMORT N, NET N, NET N-1
+        
+        Args:
+            onglet_name: Nom de l'onglet
+            dict_donnees: Dictionnaire des postes avec brut_n, amort_n, montant_n, montant_n1
+            col_brut_n: Colonne pour valeurs brutes N (défaut: F)
+            col_amort_n: Colonne pour amortissements N (défaut: G)
+            col_net_n: Colonne pour valeurs nettes N (défaut: H)
+            col_net_n1: Colonne pour valeurs nettes N-1 (défaut: I)
+            ref_col_idx: Index de la colonne REF (défaut: 1 = colonne A)
+        
+        Returns:
+            tuple: (compteur cellules remplies, erreurs)
+        """
+        if not dict_donnees:
+            return 0, 0
+            
+        ws = wb[onglet_name]
+        compteur = 0
+        erreurs = 0
+        
+        for row in ws.iter_rows(min_col=ref_col_idx, max_col=ref_col_idx, min_row=5):
+            cell = row[0]
+            ref_val = str(cell.value or '').strip()
+            
+            if len(ref_val) == 2 and ref_val.isalpha() and ref_val.isupper() and ref_val in dict_donnees:
+                row_num = cell.row
+                poste = dict_donnees[ref_val]
+                
+                # Extraire les valeurs
+                brut_n = poste.get('brut_n', 0) or 0
+                amort_n = poste.get('amort_n', 0) or 0
+                net_n = extraire_montant(poste)
+                net_n1 = extraire_montant_n1(poste)
+                
+                # Écrire BRUT N (colonne F)
+                if col_brut_n and brut_n != 0:
+                    if write_to_cell(ws, f"{col_brut_n}{row_num}", brut_n):
+                        compteur += 1
+                    else:
+                        erreurs += 1
+                
+                # Écrire AMORT N (colonne G)
+                if col_amort_n and amort_n != 0:
+                    if write_to_cell(ws, f"{col_amort_n}{row_num}", amort_n):
+                        compteur += 1
+                    else:
+                        erreurs += 1
+                
+                # Écrire NET N (colonne H)
+                if col_net_n:
+                    if write_to_cell(ws, f"{col_net_n}{row_num}", net_n):
+                        compteur += 1
+                    else:
+                        erreurs += 1
+                
+                # Écrire NET N-1 (colonne I)
+                if col_net_n1:
+                    if write_to_cell(ws, f"{col_net_n1}{row_num}", net_n1):
+                        compteur += 1
+                    else:
+                        erreurs += 1
+        
+        return compteur, erreurs
 
     # ---- BILAN (GLOBAL) ----
     if 'BILAN' in wb.sheetnames:
@@ -462,9 +783,23 @@ def remplir_liasse_officielle(results: Dict[str, Any], nom_entreprise: str, exer
     # ---- BILAN ACTIF (ONGLET SÉPARÉ) ----
     onglet_actif = next((name for name in wb.sheetnames if 'ACTIF' in name.upper() and 'PASSIF' not in name.upper() and name != 'BILAN'), None)
     if onglet_actif:
-        logger.info(f"📝 Remplissage {onglet_actif}...")
-        # Actif: N en H, N-1 en I
-        compteur, erreurs = remplir_onglet_par_scan(onglet_actif, bilan_actif_dict, 'H', 'I')
+        logger.info(f"📝 Remplissage {onglet_actif} avec BRUT, AMORTISSEMENT, NET...")
+        # Vérifier si les données brut/amort sont disponibles
+        has_brut_amort = any(poste.get('brut_n') is not None for poste in bilan_actif_dict.values())
+        
+        if has_brut_amort:
+            # Utiliser la fonction spéciale avec 4 colonnes: F (brut), G (amort), H (net N), I (net N-1)
+            compteur, erreurs = remplir_onglet_actif_avec_brut_amort(
+                onglet_actif, bilan_actif_dict, 
+                col_brut_n='F', col_amort_n='G', col_net_n='H', col_net_n1='I'
+            )
+            logger.info(f"   ✅ ACTIF avec BRUT/AMORT: {compteur} cellules remplies, {erreurs} erreurs")
+        else:
+            # Fallback: remplissage standard (colonnes H et I)
+            logger.warning("   ⚠️ Données BRUT/AMORT non disponibles - remplissage standard")
+            compteur, erreurs = remplir_onglet_par_scan(onglet_actif, bilan_actif_dict, 'H', 'I')
+            logger.info(f"   ✅ ACTIF standard: {compteur} cellules remplies, {erreurs} erreurs")
+        
         total_cellules += compteur
         erreurs_total += erreurs
     
@@ -502,23 +837,65 @@ def remplir_liasse_officielle(results: Dict[str, Any], nom_entreprise: str, exer
         erreurs_total += erreurs
         
     # ---- TFT ----
+    # Mapping complet des clés TFT vers REF
+    MAPPING_TFT_COMPLET = {
+        'ZA_tresorerie_ouverture': 'ZA',
+        'ZB_flux_operationnels': 'ZB',
+        'ZC_flux_investissement': 'ZC',
+        'ZD_flux_capitaux_propres': 'ZD',
+        'ZE_flux_capitaux_etrangers': 'ZE',
+        'ZF_flux_financement': 'ZF',
+        'ZG_variation_tresorerie': 'ZG',
+        'ZH_tresorerie_cloture': 'ZH',
+        'FA_cafg': 'FA',
+        'FB_variation_actif_hao': 'FB',
+        'FC_variation_stocks': 'FC',
+        'FD_variation_creances': 'FD',
+        'FE_variation_dettes': 'FE',
+        'FF_decaissements_investissement': 'FF',
+        'FG_encaissements_investissement': 'FG',
+        'FH_augmentation_capital': 'FH',
+        'FI_dividendes_verses': 'FI',
+        'FJ_emprunts_nouveaux': 'FJ',
+        'FK_remboursements_emprunts': 'FK',
+    }
+    
     tft_dict = {}
     tft_raw = results.get('tft', {})
+    
     if isinstance(tft_raw, dict):
+        logger.info(f"   TFT dict reçu avec {len(tft_raw)} clés: {list(tft_raw.keys())[:5]}...")
+        
         for cle, montant in tft_raw.items():
-            # Extraire prefixe si existant ex FF_decaissement
-            prefixe = cle.split('_')[0] if '_' in cle else cle[:2]
-            if prefixe.isalpha() and prefixe.isupper() and len(prefixe) == 2:
-                # Stocker le montant dans N, et 0 dans N-1
-                tft_dict[prefixe] = {'montant_n': montant, 'montant_n1': 0}
+            # Chercher dans le mapping complet
+            if cle in MAPPING_TFT_COMPLET:
+                ref = MAPPING_TFT_COMPLET[cle]
+                tft_dict[ref] = {'montant_n': float(montant or 0), 'montant_n1': 0}
+            else:
+                # Fallback: extraire prefixe si existant ex FF_decaissement
+                prefixe = cle.split('_')[0] if '_' in cle else cle[:2]
+                if prefixe.isalpha() and prefixe.isupper() and len(prefixe) == 2:
+                    tft_dict[prefixe] = {'montant_n': float(montant or 0), 'montant_n1': 0}
+        
+        logger.info(f"   TFT dict converti: {len(tft_dict)} postes (ex: {list(tft_dict.keys())[:5]})")
+    elif isinstance(tft_raw, list):
+        # Si c'est déjà une liste de postes
+        tft_dict = {p['ref']: p for p in tft_raw if 'ref' in p}
+        logger.info(f"   TFT liste reçue: {len(tft_dict)} postes")
                     
     onglet_tft = next((name for name in wb.sheetnames if 'TFT' in name.upper() or 'TRÉSORERIE' in name.upper() or 'TRESORERIE' in name.upper()), None)
-    if onglet_tft and tft_dict:
-        logger.info(f"📝 Remplissage {onglet_tft}...")
-        # TFT: N en I, N-1 en K (Basé sur screenshot TFT 1)
-        compteur, erreurs = remplir_onglet_par_scan(onglet_tft, tft_dict, 'I', 'K')
-        total_cellules += compteur
-        erreurs_total += erreurs
+    if onglet_tft:
+        if tft_dict:
+            logger.info(f"📝 Remplissage {onglet_tft} avec {len(tft_dict)} postes...")
+            # TFT: N en I, N-1 en K (Basé sur screenshot TFT 1)
+            compteur, erreurs = remplir_onglet_par_scan(onglet_tft, tft_dict, 'I', 'K')
+            total_cellules += compteur
+            erreurs_total += erreurs
+            logger.info(f"   ✅ TFT: {compteur} cellules remplies, {erreurs} erreurs")
+        else:
+            logger.warning(f"   ⚠️ TFT dict vide - onglet non rempli")
+    else:
+        logger.warning("   ⚠️ Onglet TFT non trouvé dans le template")
         
     # ---- BILAN ETAT COMPLET (Col A actif, Col J passif) ----
     onglet_bilan = next((name for name in wb.sheetnames if name.strip() == 'BILAN'), None)

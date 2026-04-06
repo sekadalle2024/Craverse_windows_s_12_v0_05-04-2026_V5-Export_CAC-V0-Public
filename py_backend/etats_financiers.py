@@ -1550,6 +1550,15 @@ async def process_excel(request: ExcelUploadRequest):
         # Traiter les balances au format liasse avec N-2
         results_liasse = process_balance_to_liasse_format(balance_df, balance_n1_df, balance_n2_df, correspondances)
         
+        # CORRECTION PROBLÈME 1: Ajouter les balances à results_liasse pour l'export
+        # Les balances sont nécessaires pour calculer BRUT et AMORTISSEMENT dans export_liasse.py
+        logger.info("📊 Ajout des balances à results_liasse pour l'export...")
+        results_liasse['balance_n_df'] = balance_df
+        results_liasse['balance_n1_df'] = balance_n1_df
+        if balance_n2_df is not None:
+            results_liasse['balance_n2_df'] = balance_n2_df
+        logger.info(f"✅ Balances ajoutées: N={len(balance_df)} lignes, N-1={len(balance_n1_df) if balance_n1_df is not None else 0} lignes")
+        
         # Calculer le TFT au format liasse (N et N-1)
         try:
             logger.info("🔄 Calcul du TFT...")
